@@ -12,6 +12,10 @@ export const translations = {
     'home.deleteJobLabel': 'Eliminar trabajo (por error de creación)',
     'home.deleteConfirm': '¿Eliminar "{name}"? Esto borra todos sus productos.',
     'home.languageToggleLabel': 'Cambiar idioma',
+    'home.codeAndCreated': 'Código {code} · Creado {date}',
+    'home.joinPlaceholder': 'Código de 6 letras',
+    'home.join': 'Unirse',
+    'home.joinNotFound': 'No existe ningún trabajo con ese código.',
 
     'newJob.title': 'Nuevo trabajo',
     'newJob.nameLabel': 'Nombre del trabajo',
@@ -31,6 +35,8 @@ export const translations = {
     'job.productUpdated': 'Producto actualizado',
     'job.productDeleted': 'Producto eliminado',
     'job.shelfCreated': 'Shelf creado',
+    'job.codeLabel': 'Código: {code} (toca para copiar)',
+    'job.codeCopied': 'Código copiado',
 
     'addManual.title': 'Agregar manual',
     'addManual.shelfLabel': 'Shelf',
@@ -131,6 +137,10 @@ export const translations = {
     'home.deleteJobLabel': 'Delete job (created by mistake)',
     'home.deleteConfirm': 'Delete "{name}"? This deletes all its products.',
     'home.languageToggleLabel': 'Change language',
+    'home.codeAndCreated': 'Code {code} · Created {date}',
+    'home.joinPlaceholder': '6-letter code',
+    'home.join': 'Join',
+    'home.joinNotFound': "No job exists with that code.",
 
     'newJob.title': 'New job',
     'newJob.nameLabel': 'Job name',
@@ -150,6 +160,8 @@ export const translations = {
     'job.productUpdated': 'Product updated',
     'job.productDeleted': 'Product deleted',
     'job.shelfCreated': 'Shelf created',
+    'job.codeLabel': 'Code: {code} (tap to copy)',
+    'job.codeCopied': 'Code copied',
 
     'addManual.title': 'Add manually',
     'addManual.shelfLabel': 'Shelf',

@@ -4,7 +4,7 @@ PWA mobile-first para hacer sets/resets de tienda más rápido: cargas el planog
 
 ## Arquitectura
 
-Todo corre 100% en el navegador, sin backend:
+El backend es **Firebase Firestore**, con autenticación anónima silenciosa (sin login, sin contraseña) solo para cumplir las reglas de seguridad de Firestore. Esto permite que dos o más celulares vean y editen el mismo trabajo en tiempo real, compartiendo un código corto de 6 letras.
 
 ```
 UI (pages/components)
@@ -13,30 +13,40 @@ UI (pages/components)
 db/*Repo.js  (jobsRepo, shelvesRepo, productsRepo)
    │  usan
    ▼
-db/db.js → IndexedDB (vía la librería "idb")
+firebase/config.js → Firestore (con cache local persistente offline-first)
 
 lib/parseSheetText.js   → convierte texto (de OCR o pegado) en filas editables
 lib/ocr.js              → Tesseract.js: imagen → texto
 lib/barcode.js          → BarcodeDetector nativo o ZXing (fallback) → UPC
 lib/upc.js              → normaliza UPC y genera variantes UPC-A/EAN-13
-db/cleanup.js           → barre jobs > 48h en un intervalo + al volver a la app
+db/cleanup.js           → barre (en este dispositivo) jobs > 48h en un intervalo + al volver a la app
 ```
 
-No hay estado global tipo Redux: cada página carga lo que necesita de IndexedDB y lo vuelve a leer después de cada cambio (`refresh()`). Con cientos de productos por trabajo esto es más que suficiente en un teléfono, y evita la complejidad de mantener un store sincronizado con la base local.
+No hay estado global tipo Redux: `JobPage` se suscribe en tiempo real (`onSnapshot`) al job, sus shelves y sus productos, así que un cambio hecho desde el celular de un compañero aparece solo, sin necesidad de refrescar. El resto de las pantallas hacen una sola lectura puntual cuando la necesitan (por ejemplo, el autocompletado de shelves al agregar un producto manual).
 
 ### Modelo de datos
 
-Tres object stores en IndexedDB:
+Una colección `jobs` en Firestore, con subcolecciones por trabajo:
 
-- **jobs**: `{ id, name, createdAt }`. El tiempo de borrado (`createdAt + 48h`) se calcula al vuelo, no se guarda como campo separado.
-- **shelves**: `{ id, jobId, name, normalizedName, createdAt }`. `normalizedName` (trim + lowercase) es la clave para que "Shelf 3" y "shelf 3 " no generen un shelf duplicado al fotografiar la misma sección dos veces. `findOrCreateShelf(jobId, nombre)` es el único punto de entrada para crear productos: siempre busca primero por `[jobId, normalizedName]` antes de crear.
-- **products**: `{ id, jobId, shelfId, name, upc, createdAt }`. El UPC se guarda ya normalizado (solo dígitos).
+- **jobs/{código}**: `{ id, name, createdAt }`. El **id del documento es el código de 6 letras** que se comparte con el equipo (alfabeto sin 0/O/1/I para que no se confundan al dictarlo). El tiempo de borrado (`createdAt + 48h`) se calcula al vuelo, no se guarda como campo separado.
+- **jobs/{código}/shelves/{id}**: `{ id, jobId, name, normalizedName, createdAt }`. El id del documento es determinístico (`encodeURIComponent(normalizedName)`), así que si dos celulares crean el mismo shelf nuevo al mismo tiempo, ambos apuntan al mismo documento en vez de duplicarlo. `findOrCreateShelf(jobId, nombre)` sigue siendo el único punto de entrada para resolver un shelf por nombre.
+- **jobs/{código}/products/{id}**: `{ id, jobId, shelfId, name, upc, createdAt }`. El UPC se guarda ya normalizado (solo dígitos).
 
 Separar `shelves` de `products` (en vez de guardar el shelf como string suelto en cada producto) permite crear un shelf vacío manualmente y que aparezca en la lista aunque no tenga productos todavía.
 
+Cada celular guarda además una lista local (`localStorage`) de los trabajos que creó o a los que se unió, solo para mostrarlos en el inicio — los datos reales de un trabajo siempre se leen de Firestore, nunca de esa lista.
+
+### Compartir un trabajo con el equipo
+
+Al crear un trabajo se genera un código de 6 letras (ej. `K7XQPL`), visible y tocable en la parte de arriba del trabajo para copiarlo. Cualquier compañero puede escribir ese código en el campo "Unirse" del inicio para entrar exactamente al mismo trabajo desde su propio celular — ambos ven y editan los mismos shelves/productos en tiempo real, sin volver a escanear ni a cargar nada.
+
+### Importaciones grandes (foto/texto pegado)
+
+`resolveShelvesBulk` y `addProductsBulk` (en `shelvesRepo.js`/`productsRepo.js`) guardan todo en lotes (`writeBatch`, hasta 450 operaciones por lote) en vez de una escritura secuencial por fila — así guardar una hoja con 1000+ productos no tarda minutos por la red.
+
 ### Borrado automático (48h)
 
-`db/cleanup.js` corre un sweep que borra cualquier job con `Date.now() - createdAt > 48h` (cascada a sus shelves y productos). Se ejecuta:
+`db/cleanup.js` corre un sweep que borra cualquier job *que este dispositivo conozca* (creado o unido) con `Date.now() - createdAt > 48h` (cascada a sus shelves y productos). Se ejecuta:
 - Al abrir la app.
 - Cada 60s mientras está abierta.
 - Cuando la pestaña vuelve a estar visible (cubre el caso del teléfono dormido en el bolsillo).
@@ -99,8 +109,9 @@ shelf-finder/
    ├─ main.jsx              # HashRouter + render
    ├─ App.jsx                # rutas + scheduler de limpieza 48h
    ├─ index.css              # diseño mobile-first (botones grandes, una mano)
+   ├─ firebase/
+   │  └─ config.js           # init de Firebase/Firestore + auth anónima
    ├─ db/
-   │  ├─ db.js               # apertura de IndexedDB + esquema
    │  ├─ jobsRepo.js
    │  ├─ shelvesRepo.js
    │  ├─ productsRepo.js
@@ -125,6 +136,30 @@ shelf-finder/
       ├─ ReviewPage.jsx, ScanPage.jsx
 ```
 
+## Configurar Firebase (una sola vez)
+
+La app no funciona como backend compartido hasta que `src/firebase/config.js` tenga los datos de un proyecto real de Firebase. Pasos en la [Consola de Firebase](https://console.firebase.google.com/):
+
+1. **Crear proyecto** → nombre cualquiera (ej. "shelf-finder"). No hace falta Google Analytics.
+2. **Firestore Database** → "Crear base de datos" → modo producción → la región más cercana.
+3. En la pestaña **Reglas** de Firestore, reemplazar el contenido por:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /{document=**} {
+         allow read, write: if request.auth != null;
+       }
+     }
+   }
+   ```
+   Esto permite leer/escribir a cualquier sesión autenticada (incluida la anónima); la seguridad real depende de que el código de 6 letras de cada trabajo sea difícil de adivinar (33^6 ≈ 1290 millones de combinaciones), no de reglas por usuario.
+4. **Authentication** → "Comenzar" → pestaña Sign-in method → habilitar **Anónimo**. No se pide ni se muestra ningún login en la app; es solo para cumplir la regla del paso 3.
+5. **Configuración del proyecto** (ícono de engranaje) → "Tus apps" → ícono `</>` para agregar una app web → nombre cualquiera → no marcar Hosting.
+6. Copiar el objeto `firebaseConfig` que aparece (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId) y pegarlo en `src/firebase/config.js`, reemplazando los placeholders `REPLACE_WITH_...`.
+
+Ese objeto no es secreto — está pensado para viajar dentro del bundle del navegador; por eso va directo al código en vez de manejarse como variable de entorno.
+
 ## Correr el proyecto
 
 ```bash
@@ -144,6 +179,9 @@ npm run icons     # regenera los PNG de public/icons (no requiere ninguna librer
 
 ## Limitaciones conocidas / próximos pasos
 
+- La app necesita internet la primera vez que arranca en un dispositivo (para el login anónimo) y para cualquier sincronización con el equipo; después de eso, Firestore sigue mostrando los datos ya descargados aunque se pierda la señal, y reintenta escribir cuando vuelve.
+- El plan gratuito de Firestore tiene una cuota diaria de lecturas/escrituras. Para el uso normal de un equipo pequeño no debería ser un problema (el escaneo usa una búsqueda puntual por UPC, no descarga todo el trabajo), pero vale la pena vigilarlo en la Consola si el uso crece mucho.
+- La seguridad de un trabajo depende de que su código de 6 letras no se comparta fuera del equipo — cualquiera con el código puede leerlo y editarlo, no hay control de acceso por persona.
 - Los íconos del manifest son un placeholder geométrico generado por script (`scripts/generate-icons.mjs`), pensado para reemplazarse por un ícono de marca real.
 - El primer uso de OCR en cada instalación necesita conexión a internet para descargar el modelo de idioma de Tesseract (luego queda cacheado por el service worker).
 - No hay un campo de "posición dentro del shelf" todavía — el modelo de `products` ya tiene espacio para agregarlo (`note`/`position`) sin cambios de esquema mayores si se necesita más adelante.

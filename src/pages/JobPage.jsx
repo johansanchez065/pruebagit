@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getJob } from '../db/jobsRepo';
-import { listShelves, findOrCreateShelf } from '../db/shelvesRepo';
-import { listProducts, updateProduct, deleteProduct } from '../db/productsRepo';
+import { subscribeJob } from '../db/jobsRepo';
+import { subscribeShelves, findOrCreateShelf } from '../db/shelvesRepo';
+import { subscribeProducts, updateProduct, deleteProduct } from '../db/productsRepo';
 import { normalizeUpc } from '../lib/upc';
 import { sortShelves } from '../lib/shelfSort';
 import { BigButton } from '../components/BigButton';
@@ -32,16 +32,18 @@ export function JobPage() {
 
   const remaining = useCountdown(job || null);
 
-  const refresh = useCallback(async () => {
-    const [j, s, p] = await Promise.all([getJob(jobId), listShelves(jobId), listProducts(jobId)]);
-    setJob(j || null);
-    setShelves(s);
-    setProducts(p);
-  }, [jobId]);
-
+  // Realtime listeners instead of a one-shot fetch + manual refresh(): a
+  // teammate's change on another phone shows up here automatically.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const unsubJob = subscribeJob(jobId, setJob);
+    const unsubShelves = subscribeShelves(jobId, setShelves);
+    const unsubProducts = subscribeProducts(jobId, setProducts);
+    return () => {
+      unsubJob();
+      unsubShelves();
+      unsubProducts();
+    };
+  }, [jobId]);
 
   const shelfById = useMemo(() => new Map(shelves.map((s) => [s.id, s])), [shelves]);
 
@@ -68,17 +70,24 @@ export function JobPage() {
 
   const handleSaveEdit = async ({ name, upc, shelf }) => {
     const target = await findOrCreateShelf(jobId, shelf);
-    await updateProduct(editingProduct.id, { name, upc, shelfId: target.id });
+    await updateProduct(jobId, editingProduct.id, { name, upc, shelfId: target.id });
     setEditingProduct(null);
     showToast(t('job.productUpdated'));
-    refresh();
   };
 
   const handleDeleteEdit = async (productId) => {
-    await deleteProduct(productId);
+    await deleteProduct(jobId, productId);
     setEditingProduct(null);
     showToast(t('job.productDeleted'));
-    refresh();
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(jobId);
+      showToast(t('job.codeCopied'));
+    } catch {
+      // Clipboard access can be denied; the code is already visible in the chip.
+    }
   };
 
   if (job === undefined) return null;
@@ -104,6 +113,10 @@ export function JobPage() {
         <h1>{job.name}</h1>
         <CountdownChip remainingMs={remaining} />
       </div>
+
+      <button type="button" className="job-code-chip" onClick={handleCopyCode}>
+        {t('job.codeLabel', { code: jobId })}
+      </button>
 
       <SearchBar value={search} onChange={setSearch} onScanClick={() => navigate(`/jobs/${jobId}/scan`)} />
 
@@ -158,10 +171,7 @@ export function JobPage() {
         <AddOptionsSheet
           jobId={jobId}
           onClose={() => setShowAddOptions(false)}
-          onShelfCreated={() => {
-            showToast(t('job.shelfCreated'));
-            refresh();
-          }}
+          onShelfCreated={() => showToast(t('job.shelfCreated'))}
         />
       )}
     </div>

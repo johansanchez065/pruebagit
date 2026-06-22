@@ -1,27 +1,17 @@
-import { getDb } from './db';
-import { JOB_TTL_MS } from './jobsRepo';
+import { JOB_TTL_MS, deleteJob, listRecentJobs } from './jobsRepo';
 
-// Sweeps every job older than 48h and cascades the delete to its shelves and
-// products. There is no manual "finish job" action by design — the user only
-// ever creates jobs, and the app forgets them on its own.
+// Sweeps every job this device knows about (created or joined) that's older
+// than 48h and cascades the delete to its shelves and products. There is no
+// manual "finish job" action by design — the user only ever creates jobs,
+// and the app forgets them on its own. Jobs live in a shared Firestore
+// collection now, so this intentionally only ever touches jobs this device
+// has in its local recents list, never the whole collection.
 export async function purgeExpiredJobs() {
-  const db = await getDb();
   const now = Date.now();
-  const jobs = await db.getAll('jobs');
-  const expired = jobs.filter((job) => now - job.createdAt > JOB_TTL_MS);
-
+  const expired = listRecentJobs().filter((job) => now - job.createdAt > JOB_TTL_MS);
   for (const job of expired) {
-    const tx = db.transaction(['jobs', 'shelves', 'products'], 'readwrite');
-    const shelfKeys = await tx.objectStore('shelves').index('jobId').getAllKeys(job.id);
-    const productKeys = await tx.objectStore('products').index('jobId').getAllKeys(job.id);
-    await Promise.all([
-      ...shelfKeys.map((key) => tx.objectStore('shelves').delete(key)),
-      ...productKeys.map((key) => tx.objectStore('products').delete(key)),
-      tx.objectStore('jobs').delete(job.id),
-    ]);
-    await tx.done;
+    await deleteJob(job.id);
   }
-
   return expired.map((job) => job.id);
 }
 

@@ -177,6 +177,36 @@ textarea:focus {
   align-items: stretch;
 }
 
+.job-code-chip {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.join-row input {
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.join-btn {
+  width: auto;
+  padding: 14px 18px;
+}
+
 .search-bar input {
   flex: 1;
   font-size: 18px;

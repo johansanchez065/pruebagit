@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { listShelves, findOrCreateShelf } from '../db/shelvesRepo';
-import { addProduct } from '../db/productsRepo';
+import { listShelves, resolveShelvesBulk } from '../db/shelvesRepo';
+import { addProductsBulk } from '../db/productsRepo';
 import { ReviewTable } from '../components/ReviewTable';
 import { BigButton } from '../components/BigButton';
 import { EmptyState } from '../components/EmptyState';
@@ -45,16 +45,17 @@ export function ReviewPage() {
     const valid = rows.filter((row) => row.name.trim());
     if (valid.length === 0) return;
     setSaving(true);
-    const shelfCache = new Map();
-    for (const row of valid) {
-      const shelfLabel = row.shelf.trim() || t('review.noShelfLabel');
-      let shelf = shelfCache.get(shelfLabel);
-      if (!shelf) {
-        shelf = await findOrCreateShelf(jobId, shelfLabel);
-        shelfCache.set(shelfLabel, shelf);
-      }
-      await addProduct({ jobId, shelfId: shelf.id, name: row.name, upc: row.upc });
-    }
+    // Resolves/creates every shelf in batched writes and saves every product
+    // in batched writes too, instead of one sequential round trip per row —
+    // a 1000+ row import would otherwise take minutes over the network.
+    const shelfLabels = valid.map((row) => row.shelf.trim() || t('review.noShelfLabel'));
+    const shelvesByLabel = await resolveShelvesBulk(jobId, shelfLabels);
+    const items = valid.map((row, i) => ({
+      shelfId: shelvesByLabel.get(shelfLabels[i]).id,
+      name: row.name,
+      upc: row.upc,
+    }));
+    await addProductsBulk(jobId, items);
     showToast(t('review.savedToast', { count: valid.length }));
     navigate(`/jobs/${jobId}`);
   };
