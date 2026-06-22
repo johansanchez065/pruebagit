@@ -1,4 +1,7 @@
+import { useLanguage } from '../context/LanguageContext';
+
 export function ReviewTable({ rows, onChangeRow, onDeleteRow, onAddRow, shelfNames }) {
+  const { t } = useLanguage();
   return (
     <div className="shelf-group">
       <datalist id="review-shelf-options">
@@ -12,24 +15,29 @@ export function ReviewTable({ rows, onChangeRow, onDeleteRow, onAddRow, shelfNam
           <div className="review-row-grid">
             <input
               list="review-shelf-options"
-              placeholder="Shelf"
+              placeholder={t('review.shelfPlaceholder')}
               value={row.shelf}
               onChange={(e) => onChangeRow(row.rowId, { shelf: e.target.value })}
             />
             <input
               inputMode="numeric"
-              placeholder="UPC"
+              placeholder={t('review.upcPlaceholder')}
               value={row.upc}
               onChange={(e) => onChangeRow(row.rowId, { upc: e.target.value })}
             />
           </div>
           <input
-            placeholder="Nombre del producto"
+            placeholder={t('review.namePlaceholder')}
             value={row.name}
             onChange={(e) => onChangeRow(row.rowId, { name: e.target.value })}
           />
           <div className="review-row-actions">
-            <button type="button" className="icon-btn icon-btn--danger" aria-label="Eliminar fila" onClick={() => onDeleteRow(row.rowId)}>
+            <button
+              type="button"
+              className="icon-btn icon-btn--danger"
+              aria-label={t('review.deleteRowLabel')}
+              onClick={() => onDeleteRow(row.rowId)}
+            >
               🗑
             </button>
           </div>
@@ -37,7 +45,7 @@ export function ReviewTable({ rows, onChangeRow, onDeleteRow, onAddRow, shelfNam
       ))}
 
       <button type="button" className="big-btn big-btn--secondary" onClick={onAddRow}>
-        + Agregar fila
+        {t('review.addRow')}
       </button>
     </div>
   );

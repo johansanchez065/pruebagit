@@ -6,6 +6,7 @@ import { ReviewTable } from '../components/ReviewTable';
 import { BigButton } from '../components/BigButton';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../context/ToastContext';
+import { useLanguage } from '../context/LanguageContext';
 
 let rowCounter = 0;
 function blankRow(shelf = '') {
@@ -17,6 +18,7 @@ export function ReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const showToast = useToast();
+  const { t } = useLanguage();
 
   const [rows, setRows] = useState(location.state?.rows ?? []);
   const [shelfNames, setShelfNames] = useState([]);
@@ -45,7 +47,7 @@ export function ReviewPage() {
     setSaving(true);
     const shelfCache = new Map();
     for (const row of valid) {
-      const shelfLabel = row.shelf.trim() || 'Sin shelf';
+      const shelfLabel = row.shelf.trim() || t('review.noShelfLabel');
       let shelf = shelfCache.get(shelfLabel);
       if (!shelf) {
         shelf = await findOrCreateShelf(jobId, shelfLabel);
@@ -53,34 +55,31 @@ export function ReviewPage() {
       }
       await addProduct({ jobId, shelfId: shelf.id, name: row.name, upc: row.upc });
     }
-    showToast(`${valid.length} producto(s) guardado(s)`);
+    showToast(t('review.savedToast', { count: valid.length }));
     navigate(`/jobs/${jobId}`);
   };
 
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Volver">
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('common.back')}>
           ‹
         </button>
-        <h1>Revisar antes de guardar</h1>
+        <h1>{t('review.title')}</h1>
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState emoji="🧐" title="No hay filas" subtitle="Agrega una fila manualmente o vuelve atrás.">
+        <EmptyState emoji="🧐" title={t('review.noRowsTitle')} subtitle={t('review.noRowsSubtitle')}>
           <BigButton variant="primary" onClick={addRow}>
-            + Agregar fila
+            {t('review.addRow')}
           </BigButton>
         </EmptyState>
       ) : (
         <>
-          <p className="helper-text">
-            Revisa shelf, producto y UPC. Corrige lo que la lectura automática haya fallado y elimina filas que no
-            correspondan.
-          </p>
+          <p className="helper-text">{t('review.helper')}</p>
           <ReviewTable rows={rows} onChangeRow={changeRow} onDeleteRow={deleteRow} onAddRow={addRow} shelfNames={shelfNames} />
           <BigButton variant="primary" disabled={saving} onClick={confirmSave}>
-            {saving ? 'Guardando...' : 'Confirmar y guardar'}
+            {saving ? t('review.saving') : t('review.confirmSave')}
           </BigButton>
         </>
       )}

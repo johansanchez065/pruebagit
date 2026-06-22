@@ -4,10 +4,12 @@ import { findByUpc } from '../db/productsRepo';
 import { listShelves } from '../db/shelvesRepo';
 import { BarcodeScannerView } from '../components/BarcodeScannerView';
 import { BigButton } from '../components/BigButton';
+import { useLanguage } from '../context/LanguageContext';
 
 export function ScanPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [result, setResult] = useState(null);
 
   const handleDetect = useCallback(
@@ -19,18 +21,18 @@ export function ScanPage() {
       }
       const shelves = await listShelves(jobId);
       const shelf = shelves.find((s) => s.id === product.shelfId);
-      setResult({ status: 'found', product, shelfName: shelf?.name || 'Sin shelf' });
+      setResult({ status: 'found', product, shelfName: shelf?.name || t('scan.noShelf') });
     },
-    [jobId],
+    [jobId, t],
   );
 
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate(`/jobs/${jobId}`)} aria-label="Volver">
+        <button className="back-btn" onClick={() => navigate(`/jobs/${jobId}`)} aria-label={t('common.back')}>
           ‹
         </button>
-        <h1>Escanear código</h1>
+        <h1>{t('scan.title')}</h1>
       </div>
 
       {!result && <BarcodeScannerView onDetect={handleDetect} />}
@@ -39,7 +41,7 @@ export function ScanPage() {
         <div className="card scan-result">
           {result.status === 'found' ? (
             <>
-              <div>Producto encontrado</div>
+              <div>{t('scan.found')}</div>
               <div className="product-row-name" style={{ fontSize: 20 }}>
                 {result.product.name}
               </div>
@@ -48,12 +50,12 @@ export function ScanPage() {
             </>
           ) : (
             <>
-              <div>No encontrado en este trabajo</div>
+              <div>{t('scan.notFound')}</div>
               <div className="upc">UPC: {result.upc}</div>
             </>
           )}
           <BigButton variant="primary" onClick={() => setResult(null)}>
-            Seguir escaneando
+            {t('scan.keepScanning')}
           </BigButton>
         </div>
       )}

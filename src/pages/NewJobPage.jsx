@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createJob } from '../db/jobsRepo';
 import { BigButton } from '../components/BigButton';
+import { useLanguage } from '../context/LanguageContext';
 
 export function NewJobPage() {
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const navigate = useNavigate();
 
@@ -16,29 +18,27 @@ export function NewJobPage() {
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Volver">
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('common.back')}>
           ‹
         </button>
-        <h1>Nuevo trabajo</h1>
+        <h1>{t('newJob.title')}</h1>
       </div>
 
       <div className="field-group">
-        <label htmlFor="job-name">Nombre del trabajo</label>
+        <label htmlFor="job-name">{t('newJob.nameLabel')}</label>
         <input
           id="job-name"
           autoFocus
-          placeholder="Set pañales Walmart tienda 14"
+          placeholder={t('newJob.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
         />
       </div>
-      <p className="helper-text">
-        Este trabajo y todos sus productos se borrarán automáticamente 48 horas después de crearlo.
-      </p>
+      <p className="helper-text">{t('newJob.helper')}</p>
 
       <BigButton variant="primary" disabled={!name.trim()} onClick={handleCreate}>
-        Crear trabajo
+        {t('newJob.create')}
       </BigButton>
     </div>
   );

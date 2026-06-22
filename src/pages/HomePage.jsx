@@ -7,8 +7,9 @@ import { CountdownChip } from '../components/CountdownChip';
 import { EmptyState } from '../components/EmptyState';
 import { useCountdown } from '../hooks/useCountdown';
 import { formatDateTime } from '../lib/time';
+import { useLanguage } from '../context/LanguageContext';
 
-function JobCard({ job, onDelete }) {
+function JobCard({ job, onDelete, lang, t }) {
   const remaining = useCountdown(job);
   return (
     <div className="job-card card" style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -17,9 +18,9 @@ function JobCard({ job, onDelete }) {
           <div className="job-card-name">{job.name}</div>
           <CountdownChip remainingMs={remaining} />
         </div>
-        <div className="job-card-meta">Creado {formatDateTime(job.createdAt)}</div>
+        <div className="job-card-meta">{t('home.created', { date: formatDateTime(job.createdAt, lang) })}</div>
       </Link>
-      <IconButton variant="danger" label="Eliminar trabajo (por error de creación)" onClick={() => onDelete(job)}>
+      <IconButton variant="danger" label={t('home.deleteJobLabel')} onClick={() => onDelete(job)}>
         🗑
       </IconButton>
     </div>
@@ -27,6 +28,7 @@ function JobCard({ job, onDelete }) {
 }
 
 export function HomePage() {
+  const { lang, setLang, t } = useLanguage();
   const [jobs, setJobs] = useState(null);
 
   const refresh = useCallback(() => {
@@ -38,7 +40,7 @@ export function HomePage() {
   }, [refresh]);
 
   const handleDelete = async (job) => {
-    if (!window.confirm(`¿Eliminar "${job.name}"? Esto borra todos sus productos.`)) return;
+    if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;
     await deleteJob(job.id);
     refresh();
   };
@@ -47,25 +49,27 @@ export function HomePage() {
     <div className="screen">
       <div className="app-header">
         <h1>Shelf Finder</h1>
+        <IconButton
+          label={t('home.languageToggleLabel')}
+          onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+        >
+          {lang === 'en' ? 'ES' : 'EN'}
+        </IconButton>
       </div>
 
       {jobs === null ? null : jobs.length === 0 ? (
-        <EmptyState
-          emoji="🗂️"
-          title="Sin trabajos activos"
-          subtitle="Crea un trabajo por cada tienda o set que vayas a hacer. Se borra solo a las 48 horas."
-        />
+        <EmptyState emoji="🗂️" title={t('home.emptyTitle')} subtitle={t('home.emptySubtitle')} />
       ) : (
         <div className="job-list">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} onDelete={handleDelete} />
+            <JobCard key={job.id} job={job} onDelete={handleDelete} lang={lang} t={t} />
           ))}
         </div>
       )}
 
       <div className="fab-row">
         <BigButton as="link" to="/jobs/new" variant="primary">
-          + Nuevo trabajo
+          {t('home.newJob')}
         </BigButton>
       </div>
     </div>

@@ -1,4 +1,7 @@
+import { useLanguage } from '../context/LanguageContext';
+
 export function SearchBar({ value, onChange, onScanClick, placeholder }) {
+  const { t } = useLanguage();
   return (
     <div className="search-bar">
       <input
@@ -6,17 +9,17 @@ export function SearchBar({ value, onChange, onScanClick, placeholder }) {
         inputMode="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || 'Buscar por UPC o nombre...'}
+        placeholder={placeholder || t('searchBar.placeholder')}
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"
       />
       {value ? (
-        <button type="button" className="icon-btn" aria-label="Limpiar" onClick={() => onChange('')}>
+        <button type="button" className="icon-btn" aria-label={t('searchBar.clearLabel')} onClick={() => onChange('')}>
           ✕
         </button>
       ) : null}
-      <button type="button" className="icon-btn" aria-label="Escanear código de barras" onClick={onScanClick}>
+      <button type="button" className="icon-btn" aria-label={t('searchBar.scanLabel')} onClick={onScanClick}>
         📷
       </button>
     </div>

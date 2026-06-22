@@ -3,10 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { recognizeSheetText } from '../lib/ocr';
 import { parseSheetText } from '../lib/parseSheetText';
 import { BigButton } from '../components/BigButton';
+import { useLanguage } from '../context/LanguageContext';
 
 export function PhotoOcrPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const fileInputRef = useRef(null);
 
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -44,10 +46,10 @@ export function PhotoOcrPage() {
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Volver">
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('common.back')}>
           ‹
         </button>
-        <h1>Foto del planogram</h1>
+        <h1>{t('photoOcr.title')}</h1>
       </div>
 
       <input
@@ -61,44 +63,45 @@ export function PhotoOcrPage() {
 
       {status === 'idle' && (
         <>
-          <p className="helper-text">
-            Toma una foto clara y bien iluminada de la hoja. Entre mejor se vea el texto, mejor sale la lectura
-            automática.
-          </p>
+          <p className="helper-text">{t('photoOcr.helperIdle')}</p>
           <BigButton variant="primary" onClick={() => fileInputRef.current?.click()}>
-            📷 Tomar foto
+            {t('photoOcr.takePhoto')}
           </BigButton>
         </>
       )}
 
       {previewUrl && (
-        <img src={previewUrl} alt="Foto de la hoja" style={{ width: '100%', borderRadius: 16, maxHeight: 240, objectFit: 'cover' }} />
+        <img
+          src={previewUrl}
+          alt={t('photoOcr.imageAlt')}
+          style={{ width: '100%', borderRadius: 16, maxHeight: 240, objectFit: 'cover' }}
+        />
       )}
 
       {status === 'recognizing' && (
         <div className="card center-text">
-          <p>Leyendo texto... {Math.round(progress * 100)}%</p>
+          <p>{t('photoOcr.recognizing', { progress: Math.round(progress * 100) })}</p>
         </div>
       )}
 
       {status === 'error' && (
         <div className="card center-text">
-          <p>No se pudo leer la imagen. Intenta con otra foto.</p>
+          <p>{t('photoOcr.errorMessage')}</p>
           <BigButton variant="secondary" onClick={retake}>
-            Reintentar
+            {t('photoOcr.retry')}
           </BigButton>
         </div>
       )}
 
       {status === 'done' && (
         <>
-          <p className="helper-text">Texto detectado. Corrígelo si algo salió mal antes de continuar.</p>
+          <p className="helper-text">{t('photoOcr.helperDone')}</p>
           <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} />
           <BigButton variant="primary" onClick={handleContinue}>
-            Continuar a revisión
+            {t('photoOcr.continueToReview')}
           </BigButton>
           <BigButton variant="ghost" onClick={retake}>
-            Tomar otra foto
+            {t('photoOcr.retakePhoto')}
           </BigButton>
         </>
       )}

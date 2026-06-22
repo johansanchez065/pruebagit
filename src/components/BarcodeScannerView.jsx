@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { startBarcodeScanner } from '../lib/barcode';
+import { useLanguage } from '../context/LanguageContext';
 
 export function BarcodeScannerView({ onDetect }) {
+  const { t } = useLanguage();
   const videoRef = useRef(null);
   const lastDetectionRef = useRef({ code: null, at: 0 });
   const [error, setError] = useState(null);
@@ -30,13 +32,13 @@ export function BarcodeScannerView({ onDetect }) {
         if (cancelled) c.stop();
         else controls = c;
       })
-      .catch((err) => setError(err?.message || 'No se pudo acceder a la cámara.'));
+      .catch((err) => setError(err?.message || t('scan.cameraError')));
 
     return () => {
       cancelled = true;
       controls?.stop();
     };
-  }, [onDetect]);
+  }, [onDetect, t]);
 
   return (
     <div className="scanner-view">

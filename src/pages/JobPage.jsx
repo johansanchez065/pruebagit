@@ -15,11 +15,13 @@ import { AddOptionsSheet } from '../components/AddOptionsSheet';
 import { EmptyState } from '../components/EmptyState';
 import { useCountdown } from '../hooks/useCountdown';
 import { useToast } from '../context/ToastContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export function JobPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
   const showToast = useToast();
+  const { t } = useLanguage();
 
   const [job, setJob] = useState(undefined);
   const [shelves, setShelves] = useState([]);
@@ -68,14 +70,14 @@ export function JobPage() {
     const target = await findOrCreateShelf(jobId, shelf);
     await updateProduct(editingProduct.id, { name, upc, shelfId: target.id });
     setEditingProduct(null);
-    showToast('Producto actualizado');
+    showToast(t('job.productUpdated'));
     refresh();
   };
 
   const handleDeleteEdit = async (productId) => {
     await deleteProduct(productId);
     setEditingProduct(null);
-    showToast('Producto eliminado');
+    showToast(t('job.productDeleted'));
     refresh();
   };
 
@@ -84,13 +86,9 @@ export function JobPage() {
   if (job === null) {
     return (
       <div className="screen">
-        <EmptyState
-          emoji="⏳"
-          title="Este trabajo ya no existe"
-          subtitle="Probablemente pasaron más de 48 horas y se borró automáticamente."
-        >
+        <EmptyState emoji="⏳" title={t('job.expiredTitle')} subtitle={t('job.expiredSubtitle')}>
           <BigButton as="link" to="/" variant="primary">
-            Volver al inicio
+            {t('job.backHome')}
           </BigButton>
         </EmptyState>
       </div>
@@ -100,7 +98,7 @@ export function JobPage() {
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate('/')} aria-label="Volver">
+        <button className="back-btn" onClick={() => navigate('/')} aria-label={t('common.back')}>
           ‹
         </button>
         <h1>{job.name}</h1>
@@ -111,16 +109,16 @@ export function JobPage() {
 
       <div className="quick-actions">
         <BigButton variant="secondary" onClick={() => navigate(`/jobs/${jobId}/scan`)}>
-          📷 Escanear
+          {t('job.scan')}
         </BigButton>
         <BigButton variant="secondary" onClick={() => setShowAddOptions(true)}>
-          + Agregar
+          {t('job.add')}
         </BigButton>
       </div>
 
       {filtered !== null ? (
         filtered.length === 0 ? (
-          <EmptyState emoji="🔍" title="Sin resultados" subtitle="Revisa el UPC o intenta con otra palabra." />
+          <EmptyState emoji="🔍" title={t('job.noResultsTitle')} subtitle={t('job.noResultsSubtitle')} />
         ) : (
           <div className="shelf-group">
             {filtered.map((product) => (
@@ -134,11 +132,7 @@ export function JobPage() {
           </div>
         )
       ) : products.length === 0 ? (
-        <EmptyState
-          emoji="📦"
-          title="Aún no hay productos"
-          subtitle="Toma una foto del planogram, pega el texto o agrégalos manualmente."
-        />
+        <EmptyState emoji="📦" title={t('job.noProductsTitle')} subtitle={t('job.noProductsSubtitle')} />
       ) : (
         grouped.map(({ shelf, products: shelfProducts }) => (
           <ShelfGroup
@@ -165,7 +159,7 @@ export function JobPage() {
           jobId={jobId}
           onClose={() => setShowAddOptions(false)}
           onShelfCreated={() => {
-            showToast('Shelf creado');
+            showToast(t('job.shelfCreated'));
             refresh();
           }}
         />

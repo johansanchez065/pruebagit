@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { startCleanupScheduler } from './db/cleanup';
 import { ToastProvider, useToast } from './context/ToastContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { LanguagePicker } from './components/LanguagePicker';
 import { HomePage } from './pages/HomePage';
 import { JobPage } from './pages/JobPage';
 
@@ -17,20 +19,25 @@ const ScanPage = lazy(() => import('./pages/ScanPage').then((m) => ({ default: m
 
 function CleanupScheduler() {
   const showToast = useToast();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const stop = startCleanupScheduler({
       onPurge: (ids) => {
-        if (ids.length > 0) showToast('Se borraron trabajos vencidos (48h)');
+        if (ids.length > 0) showToast(t('toast.jobsPurged'));
       },
     });
     return stop;
-  }, [showToast]);
+  }, [showToast, t]);
 
   return null;
 }
 
-export function App() {
+function AppRoutes() {
+  const { lang } = useLanguage();
+
+  if (!lang) return <LanguagePicker />;
+
   return (
     <ToastProvider>
       <CleanupScheduler />
@@ -47,5 +54,13 @@ export function App() {
         </Routes>
       </Suspense>
     </ToastProvider>
+  );
+}
+
+export function App() {
+  return (
+    <LanguageProvider>
+      <AppRoutes />
+    </LanguageProvider>
   );
 }

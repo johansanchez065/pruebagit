@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findOrCreateShelf } from '../db/shelvesRepo';
 import { BigButton } from './BigButton';
+import { useLanguage } from '../context/LanguageContext';
 
 export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [creatingShelf, setCreatingShelf] = useState(false);
   const [shelfName, setShelfName] = useState('');
 
@@ -19,23 +21,23 @@ export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-          <h2>Nuevo shelf</h2>
+          <h2>{t('addOptions.newShelfTitle')}</h2>
           <div className="field-group">
-            <label htmlFor="new-shelf-name">Nombre del shelf</label>
+            <label htmlFor="new-shelf-name">{t('addOptions.shelfNameLabel')}</label>
             <input
               id="new-shelf-name"
               autoFocus
-              placeholder="Shelf 5"
+              placeholder={t('addOptions.shelfNamePlaceholder')}
               value={shelfName}
               onChange={(e) => setShelfName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateShelf()}
             />
           </div>
           <BigButton variant="primary" disabled={!shelfName.trim()} onClick={handleCreateShelf}>
-            Crear shelf
+            {t('addOptions.createShelf')}
           </BigButton>
           <BigButton variant="ghost" onClick={() => setCreatingShelf(false)}>
-            Volver
+            {t('addOptions.back')}
           </BigButton>
         </div>
       </div>
@@ -45,21 +47,21 @@ export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <h2>Agregar productos</h2>
+        <h2>{t('addOptions.title')}</h2>
         <BigButton variant="primary" onClick={() => navigate(`/jobs/${jobId}/add/photo`)}>
-          📷 Tomar foto (OCR)
+          {t('addOptions.takePhoto')}
         </BigButton>
         <BigButton variant="secondary" onClick={() => navigate(`/jobs/${jobId}/add/paste`)}>
-          📋 Pegar texto
+          {t('addOptions.pasteText')}
         </BigButton>
         <BigButton variant="secondary" onClick={() => navigate(`/jobs/${jobId}/add/manual`)}>
-          ✏️ Agregar manual
+          {t('addOptions.addManual')}
         </BigButton>
         <BigButton variant="secondary" onClick={() => setCreatingShelf(true)}>
-          🗂️ Crear shelf vacío
+          {t('addOptions.createEmptyShelf')}
         </BigButton>
         <BigButton variant="ghost" onClick={onClose}>
-          Cancelar
+          {t('addOptions.cancel')}
         </BigButton>
       </div>
     </div>
