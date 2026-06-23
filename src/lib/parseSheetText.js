@@ -17,6 +17,27 @@ const REPORT_ROW_RE =
 // codes still get picked up for the reviewer to fix.
 const PRODUCT_LINE_RE = /^(.*\S)\s+(\d{6,14})\s*$/;
 
+// The printed column-header row ("Position UPC Long Description Stockcode
+// Size UOM Facings Status Pack Out Case pack Mvt DOS") matches none of the
+// row patterns above, so without this it falls into the catch-all and gets
+// saved as a fake product. Headers never contain digits and repeat several
+// of these column names, which real descriptions essentially never do
+// together — that combination is what tells the two apart.
+const HEADER_KEYWORDS = [
+  'position', 'upc', 'description', 'stockcode', 'size', 'uom', 'facings', 'status', 'pack', 'case', 'mvt', 'dos',
+];
+
+function isHeaderLine(line) {
+  if (/\d/.test(line)) return false;
+  const lower = line.toLowerCase();
+  const matches = HEADER_KEYWORDS.filter((kw) => lower.includes(kw)).length;
+  return matches >= 2;
+}
+
+// The report also prints a "Totals:" footer between shelf sections, with no
+// product data on its own line — same kind of noise as the header row.
+const NOISE_LINE_RE = /^totals?:?$/i;
+
 let unassignedCounter = 0;
 
 function blankRow(shelf) {
@@ -41,9 +62,14 @@ function nextRowId() {
 // pasted by hand) into draft rows for the review screen. Nothing here is
 // persisted — every row, including unparsed/noisy lines, is surfaced so the
 // user can fix or discard it before it touches the database.
-export function parseSheetText(text) {
+//
+// `defaultShelf` is the shelf the user is currently photographing/pasting —
+// most imports are one shelf at a time, so every row defaults to it unless a
+// `Shelf:` header line inside the text itself overrides it for the rows that
+// follow.
+export function parseSheetText(text, { defaultShelf = '' } = {}) {
   const rows = [];
-  let currentShelf = '';
+  let currentShelf = defaultShelf;
 
   const lines = text
     .split(/\r?\n/)
@@ -56,6 +82,8 @@ export function parseSheetText(text) {
       currentShelf = `Shelf ${headerMatch[1]}`;
       continue;
     }
+
+    if (isHeaderLine(line) || NOISE_LINE_RE.test(line)) continue;
 
     const reportMatch = line.match(REPORT_ROW_RE);
     if (reportMatch) {

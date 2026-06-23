@@ -74,6 +74,8 @@ export const translations = {
     'photoOcr.errorMessage': 'No se pudo leer la imagen. Intenta con otra foto.',
     'photoOcr.retry': 'Reintentar',
     'photoOcr.helperDone': 'Texto detectado. Corrígelo si algo salió mal antes de continuar.',
+    'photoOcr.shelfLabel': 'Shelf de esta foto (opcional)',
+    'photoOcr.shelfPlaceholder': 'Shelf 15',
     'photoOcr.continueToReview': 'Continuar a revisión',
     'photoOcr.retakePhoto': 'Tomar otra foto',
 
@@ -277,6 +279,8 @@ export const translations = {
     'photoOcr.errorMessage': "Couldn't read the image. Try another photo.",
     'photoOcr.retry': 'Retry',
     'photoOcr.helperDone': 'Text detected. Fix anything that went wrong before continuing.',
+    'photoOcr.shelfLabel': 'Shelf for this photo (optional)',
+    'photoOcr.shelfPlaceholder': 'Shelf 15',
     'photoOcr.continueToReview': 'Continue to review',
     'photoOcr.retakePhoto': 'Take another photo',
 
