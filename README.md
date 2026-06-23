@@ -1,57 +1,60 @@
 # Shelf Finder
 
-PWA mobile-first para hacer sets/resets de tienda más rápido: cargas el planogram (foto, texto pegado o manual), revisas los datos antes de guardarlos, y luego buscas cualquier producto por UPC/nombre o escaneando el código de barras para saber a qué shelf va. Cada trabajo vive 48 horas y se borra solo.
+PWA mobile-first para hacer sets/resets de tienda más rápido: importás el planogram real (foto, texto pegado o manual), revisás los datos en una tabla editable antes de guardarlos, y después buscás cualquier producto por UPC completo/parcial, nombre, posición o shelf para saber dónde va y marcarlo encontrado. Cada trabajo vive 48 horas y se borra solo.
 
 ## Arquitectura
 
-El backend es **Firebase Firestore**, con autenticación anónima silenciosa (sin login, sin contraseña) solo para cumplir las reglas de seguridad de Firestore. Esto permite que dos o más celulares vean y editen el mismo trabajo en tiempo real, compartiendo un código corto de 6 letras.
+El backend es **IndexedDB** (vía la librería [`idb`](https://www.npmjs.com/package/idb)), 100% local al dispositivo — no hay servidor, no hay login, no hay costo por uso. Esto cumple a propósito con "no usar Firebase/Supabase todavía": no hace falta una cuenta en la nube para que la app funcione, y nada sale del teléfono.
 
 ```
 UI (pages/components)
    │  llama a
    ▼
-db/*Repo.js  (jobsRepo, shelvesRepo, productsRepo)
+db/*Repo.js  (jobsRepo, shelvesRepo, productsRepo, photosRepo, searchHistoryRepo)
    │  usan
    ▼
-firebase/config.js → Firestore (con cache local persistente offline-first)
+db/db.js → IndexedDB ('shelf-finder-db', vía idb) + pub/sub en memoria para que las pantallas se sientan "en vivo"
 
-lib/parseSheetText.js   → convierte texto (de OCR o pegado) en filas editables
+lib/parseSheetText.js   → convierte texto (de OCR o pegado) en filas editables con todas las columnas del planogram
+lib/reviewAlerts.js     → detecta filas con datos sospechosos antes de guardar (UPC vacío, posición duplicada, etc.)
+lib/report.js           → arma el desglose por shelf y el texto plano del reporte final
 lib/ocr.js              → Tesseract.js: imagen → texto
 lib/barcode.js          → BarcodeDetector nativo o ZXing (fallback) → UPC
 lib/upc.js              → normaliza UPC y genera variantes UPC-A/EAN-13
+lib/shelfSort.js        → orden de shelves por nombre y de productos por posición numérica
 db/cleanup.js           → barre (en este dispositivo) jobs > 48h en un intervalo + al volver a la app
 ```
 
-No hay estado global tipo Redux: `JobPage` se suscribe en tiempo real (`onSnapshot`) al job, sus shelves y sus productos, así que un cambio hecho desde el celular de un compañero aparece solo, sin necesidad de refrescar. El resto de las pantallas hacen una sola lectura puntual cuando la necesitan (por ejemplo, el autocompletado de shelves al agregar un producto manual).
+No hay estado global tipo Redux: `JobPage` se suscribe (`subscribeJob`/`subscribeShelves`/`subscribeProducts`) a un pub/sub en memoria (`db/db.js`) que se dispara cada vez que un repo escribe — así un cambio hecho desde **esta misma pestaña** (otra pantalla, otro componente) aparece sin recargar. Como todo es local a este dispositivo, hoy eso no cruza a otro celular; el código corto de 6 letras de cada trabajo ya existe y queda reservado como el enganche para cuando "Modo equipo" (sync entre dispositivos) se implemente más adelante — ver la nota en `db/jobsRepo.js`.
 
 ### Modelo de datos
 
-Una colección `jobs` en Firestore, con subcolecciones por trabajo:
+`getDb()` (`src/db/db.js`) abre una sola base IndexedDB con estos object stores:
 
-- **jobs/{código}**: `{ id, name, createdAt }`. El **id del documento es el código de 6 letras** que se comparte con el equipo (alfabeto sin 0/O/1/I para que no se confundan al dictarlo). El tiempo de borrado (`createdAt + 48h`) se calcula al vuelo, no se guarda como campo separado.
-- **jobs/{código}/shelves/{id}**: `{ id, jobId, name, normalizedName, createdAt }`. El id del documento es determinístico (`encodeURIComponent(normalizedName)`), así que si dos celulares crean el mismo shelf nuevo al mismo tiempo, ambos apuntan al mismo documento en vez de duplicarlo. `findOrCreateShelf(jobId, nombre)` sigue siendo el único punto de entrada para resolver un shelf por nombre.
-- **jobs/{código}/products/{id}**: `{ id, jobId, shelfId, name, upc, createdAt }`. El UPC se guarda ya normalizado (solo dígitos).
+- **jobs** `{ id, name, createdAt }`. El **id es el código de 6 letras** que se muestra en el trabajo (alfabeto sin 0/O/1/I para que no se confunda al dictarlo). El vencimiento (`createdAt + 48h`) se calcula al vuelo, no se guarda como campo separado.
+- **shelves** `{ id, jobId, name, normalizedName, createdAt }`, con un índice único `[jobId, normalizedName]` — así `findOrCreateShelf(jobId, nombre)` nunca duplica un shelf que ya existe con ese nombre (ignorando mayúsculas/espacios), sea que venga de un import masivo o de "Crear shelf vacío".
+- **products** `{ id, jobId, shelfId, description, upc, position, stockcode, size, uom, facings, status, updatedBy, updatedAt, createdAt }` — el esquema completo de una fila de planogram real (`Position | UPC | Long Description | Stockcode | Size | UOM | Facings`), más `status` (`'pending' | 'found' | 'not_found'`) y quién/cuándo lo marcó. Productos guardados antes de que existiera este esquema (solo `{shelfId, name, upc}`) se siguen leyendo bien: `normalizeProduct()` en `productsRepo.js` les rellena cada campo nuevo con un default y deriva `description`/`name` como alias del mismo valor.
+- **photos** `{ id, jobId, blob, createdAt }` — fotos de referencia (no se usan como input de OCR), comprimidas a JPEG antes de guardarse (`photosRepo.js`).
+- **searchHistory** `{ id, jobId, productId, description, upc, shelfName, createdAt }` — las últimas 10 búsquedas que resolvieron a un solo producto, por trabajo.
 
-Separar `shelves` de `products` (en vez de guardar el shelf como string suelto en cada producto) permite crear un shelf vacío manualmente y que aparezca en la lista aunque no tenga productos todavía.
+Separar `shelves` de `products` permite crear un shelf vacío manualmente y que aparezca en la lista aunque no tenga productos todavía. Todo lo de un trabajo (shelves, products, photos, searchHistory) se borra en cascada cuando el trabajo se borra o vence — ver `deleteAllForJob` en `db/db.js`.
 
-Cada celular guarda además una lista local (`localStorage`) de los trabajos que creó o a los que se unió, solo para mostrarlos en el inicio — los datos reales de un trabajo siempre se leen de Firestore, nunca de esa lista.
+### Importar el planogram real
 
-### Compartir un trabajo con el equipo
+`lib/parseSheetText.js` reconoce encabezados de shelf (`Shelf 12`, `Shelf: 12, Length: ...`) y filas de reporte impreso con columnas posicionales (`28  73891202239  BOSTON MARKET SWEET & SOUR CHIC  037739  14.00  OZ  1` → posición, UPC, descripción, stockcode, tamaño, unidad, facings), además de líneas simples tipeadas a mano (`<nombre> <UPC>`). Cualquier línea que no calce en ningún patrón (típico de ruido de OCR) se agrega igual como fila editable con los campos vacíos en vez de perderse — el usuario decide en la Revisión si la corrige o la borra.
 
-Al crear un trabajo se genera un código de 6 letras (ej. `K7XQPL`), visible y tocable en la parte de arriba del trabajo para copiarlo. Cualquier compañero puede escribir ese código en el campo "Unirse" del inicio para entrar exactamente al mismo trabajo desde su propio celular — ambos ven y editan los mismos shelves/productos en tiempo real, sin volver a escanear ni a cargar nada.
+### Revisión editable antes de guardar
 
-### Importaciones grandes (foto/texto pegado)
+Ninguna importación (foto, texto pegado o manual masivo) escribe directo a IndexedDB. Siempre pasa primero por `ReviewPage`/`ReviewTable`, una tabla editable donde cada fila tiene Shelf, Posición, Descripción, UPC, Stockcode, Tamaño/Unidad/Facings, y un botón para borrarla. `lib/reviewAlerts.js` calcula, mirando todas las filas juntas (no cada una aislada, porque detectar UPC/posición duplicados requiere contar entre filas), chips de alerta no bloqueantes:
 
-`resolveShelvesBulk` y `addProductsBulk` (en `shelvesRepo.js`/`productsRepo.js`) guardan todo en lotes (`writeBatch`, hasta 450 operaciones por lote) en vez de una escritura secuencial por fila — así guardar una hoja con 1000+ productos no tarda minutos por la red.
+- **Críticas** (rojo): UPC vacío, UPC con letras, Shelf faltante, Descripción vacía.
+- **Advertencia** (ámbar): UPC demasiado corto, UPC duplicado, Posición faltante, Posición duplicada dentro del mismo shelf.
+
+Las alertas nunca bloquean "Confirmar y guardar" — son una guía visual, no una validación dura. Al guardar, cada fila busca o crea su shelf por nombre normalizado, así que un mismo shelf nunca se duplica venga de donde venga.
 
 ### Borrado automático (48h)
 
-`db/cleanup.js` corre un sweep que borra cualquier job *que este dispositivo conozca* (creado o unido) con `Date.now() - createdAt > 48h` (cascada a sus shelves y productos). Se ejecuta:
-- Al abrir la app.
-- Cada 60s mientras está abierta.
-- Cuando la pestaña vuelve a estar visible (cubre el caso del teléfono dormido en el bolsillo).
-
-No existe un botón de "Terminé esta tienda" a propósito — es la única forma de "cerrar" un trabajo, tal como se pidió.
+`db/cleanup.js` corre un sweep que borra cualquier job *que este dispositivo conozca* con `Date.now() - createdAt > 48h` (cascada a shelves, products, photos y searchHistory). Se ejecuta al abrir la app, cada 60s mientras está abierta, y cuando la pestaña vuelve a estar visible (cubre el caso del teléfono dormido en el bolsillo). No existe un botón de "Terminé esta tienda" a propósito — el vencimiento es la única forma de "cerrar" un trabajo.
 
 ## Flujo de usuario
 
@@ -59,17 +62,27 @@ No existe un botón de "Terminé esta tienda" a propósito — es la única form
 Home (lista de trabajos + tiempo restante)
  └─ Nuevo trabajo → nombre → entra directo al trabajo
 
-Job (buscador + acciones rápidas + lista por shelf)
- ├─ Escanear → cámara → UPC detectado → "Producto encontrado: Shelf X"
+Job (buscador + acciones rápidas + progreso + búsquedas recientes + lista por shelf)
+ ├─ Buscar → UPC completo/parcial (últimos 4-6 dígitos), descripción, posición o shelf
+ │    └─ Un solo resultado → tarjeta grande (ProductMatchCard) con todo el detalle y ✅/❌
+ ├─ Escanear → cámara → UPC detectado → producto + shelf + posición, y queda en búsquedas recientes
  ├─ Agregar → hoja de opciones:
  │    ├─ Tomar foto (OCR) → texto detectado (editable) → Revisión → Guardar
  │    ├─ Pegar texto → Revisión → Guardar
- │    ├─ Agregar manual → shelf/nombre/UPC → Guardar (o "Guardar y agregar otro")
+ │    ├─ Agregar manual → shelf/posición/descripción/UPC → Guardar (o "Guardar y agregar otro")
+ │    ├─ Fotos de referencia → galería de fotos del set/planogram (solo visual)
  │    └─ Crear shelf vacío
- └─ Tocar un producto → editar shelf/nombre/UPC o eliminar
+ ├─ Tocar el resumen de progreso → Reporte final (stats + desglose por shelf + lista de no encontrados, copiable)
+ └─ Tocar un producto → editar cualquier campo o eliminarlo
 ```
 
-La pantalla de **Revisión** es el punto en común de OCR y texto pegado: nunca se escribe a IndexedDB directamente desde la foto o el texto. Siempre se pasa primero por una tabla editable (`ReviewTable`) donde se puede corregir, borrar o agregar filas antes de tocar "Confirmar y guardar". Ahí es también donde se resuelve la regla de "no duplicar shelf": al guardar, cada fila busca o crea su shelf por nombre normalizado.
+### Búsqueda
+
+Un solo campo de texto cubre todo: UPC completo, cualquier substring de UPC (lo que cubre buscar por los últimos 4/5/6 dígitos, ya que eso es justo un substring final), descripción, posición y nombre de shelf. Cuando el resultado se reduce a un único producto, `JobPage` muestra `ProductMatchCard` — una tarjeta grande con descripción, UPC, shelf, posición, tamaño/unidad, facings y los botones ✅/❌, pensada para verse de un vistazo parado en el pasillo. Esa búsqueda exitosa también se guarda en el historial (`searchHistoryRepo.js`), que aparece como chips tocables debajo del buscador cuando el campo está vacío.
+
+### Progreso y reporte
+
+`JobPage` muestra una barra compacta (`ProgressSummary`) con encontrados/total/porcentaje; tocarla navega a `/jobs/:jobId/report`, donde está el desglose completo (por shelf, y la lista de no encontrados) más un botón para copiar todo como texto plano (`lib/report.js`) — listo para pegar en un chat o correo, con Trabajo/Usuario/Fecha, stats y el formato `UPC - Descripción - Shelf - Posición` para cada no encontrado. Dentro de cada shelf (`ShelfGroup`), los productos se ordenan por posición numérica y el título del shelf muestra su propio "encontrados/total".
 
 ## Convertir fotos en datos revisables: opciones de OCR
 
@@ -78,22 +91,22 @@ Esto es lo que se evaluó para el paso "foto → texto":
 | Opción | Cómo funciona | Pros | Contras |
 |---|---|---|---|
 | **Tesseract.js (elegida para v1)** | OCR 100% en el dispositivo, vía WebAssembly. | Gratis, funciona sin backend, los datos no salen del teléfono (privacidad), no depende de un servicio de pago. | Precisión media-baja con fotos torcidas/con poca luz; el primer uso necesita descargar ~5-10MB de datos del idioma (se cachea con el service worker para usos posteriores); más lento que un OCR en la nube (unos segundos por foto). |
-| **OCR en la nube** (Google Cloud Vision, AWS Textract, Azure Document Intelligence) | La foto se sube a un endpoint propio que llama al servicio. | Mucha mejor precisión, especialmente con texto pequeño o manuscrito; más rápido. | Requiere backend propio (costo, mantenimiento, autenticación), depende de tener señal/datos en el pasillo, tiene costo por imagen, y la foto sale del dispositivo. |
-| **Híbrido** | Tesseract.js por defecto; si el usuario marca el resultado como "malo", se ofrece reintentar contra un endpoint en la nube. | Lo mejor de ambos: gratis y rápido en el caso común, con una salida de mayor precisión cuando se necesita. | Más complejo de construir; requiere ese backend para el camino de respaldo. |
+| **OCR en la nube** (Google Cloud Vision, AWS Textract, Azure Document Intelligence) | La foto se sube a un endpoint propio que llama al servicio. | Mucha mejor precisión, especialmente con texto pequeño; más rápido. | Requiere backend propio (costo, mantenimiento), depende de tener señal/datos en el pasillo, tiene costo por imagen, y la foto sale del dispositivo. |
+| **Híbrido** | Tesseract.js por defecto; si el resultado es malo, reintentar contra un endpoint en la nube. | Lo mejor de ambos. | Más complejo de construir; requiere ese backend para el camino de respaldo. |
 
 Para v1 se implementó **Tesseract.js**, porque el caso de uso (parado en el pasillo, a veces sin buena señal, sin querer pagar por imagen) favorece que todo corra local. El punto de integración está aislado en `src/lib/ocr.js` (`recognizeSheetText(imagen)` devuelve el texto plano) — cambiar a un OCR externo más adelante es reemplazar esa única función, sin tocar el resto de la app, ya que lo que consume el resultado (`parseSheetText`) solo necesita un string de texto.
 
-Independientemente del motor de OCR, la pantalla de "Foto" deja el texto reconocido en un `<textarea>` editable **antes** de parsearlo a filas — así un error de OCR (un UPC mal leído, una línea cortada) se corrige en texto plano antes de llegar a la tabla de revisión.
-
-### Por qué nunca se descarta una línea silenciosamente
-
-`parseSheetText` reconoce líneas tipo `Shelf 3:` como encabezado y líneas tipo `<nombre> <6 a 14 dígitos>` como producto. Cualquier línea que no calce en ese patrón (ruido típico de OCR) se agrega igual como fila editable con el UPC vacío, en vez de perderse — así el usuario decide si la corrige o la borra en la pantalla de revisión, nunca pasa inadvertida.
+Independientemente del motor de OCR, la pantalla de "Foto" deja el texto reconocido en un `<textarea>` editable **antes** de parsearlo a filas — así un error de OCR se corrige en texto plano antes de llegar a la tabla de revisión.
 
 ## Escaneo de código de barras
 
 `src/lib/barcode.js` intenta primero la API nativa `BarcodeDetector` (rápida, sin descargas). **Safari/iOS no la implementa** a la fecha, así que en iPhone se usa automáticamente el fallback con `@zxing/browser`, que decodifica el video cuadro por cuadro en JS/WASM. La cámara se pide con `facingMode: 'environment'` (cámara trasera).
 
 UPC-A (12 dígitos) y EAN-13 (13 dígitos) a veces representan el mismo código con/sin el cero inicial — por eso tanto la búsqueda manual como el escaneo prueban las variantes (`lib/upc.js`) antes de decir "no encontrado".
+
+## Fotos de referencia
+
+Visual-only: sirven para que el equipo vea cómo debería quedar el shelf armado, no se usan como input de OCR. Se comprimen a JPEG (máx. 1280px de lado) antes de guardarse en IndexedDB (`photosRepo.js`), para no agotar la cuota de almacenamiento del teléfono con fotos de cámara a resolución completa. Se borran en cascada junto con el resto del trabajo.
 
 ## Estructura de archivos
 
@@ -109,56 +122,39 @@ shelf-finder/
    ├─ main.jsx              # HashRouter + render
    ├─ App.jsx                # rutas + scheduler de limpieza 48h
    ├─ index.css              # diseño mobile-first (botones grandes, una mano)
-   ├─ firebase/
-   │  └─ config.js           # init de Firebase/Firestore + auth anónima
    ├─ db/
+   │  ├─ db.js               # IndexedDB (idb) + pub/sub en memoria + borrado en cascada
    │  ├─ jobsRepo.js
    │  ├─ shelvesRepo.js
    │  ├─ productsRepo.js
+   │  ├─ photosRepo.js
+   │  ├─ searchHistoryRepo.js
    │  └─ cleanup.js
    ├─ lib/
-   │  ├─ parseSheetText.js   # texto → filas {shelf, name, upc}
+   │  ├─ parseSheetText.js   # texto → filas con todas las columnas del planogram
+   │  ├─ reviewAlerts.js     # chips de alerta no bloqueantes para la Revisión
+   │  ├─ report.js           # desglose por shelf + texto plano del reporte
    │  ├─ ocr.js              # Tesseract.js
    │  ├─ barcode.js          # BarcodeDetector + fallback ZXing
    │  ├─ upc.js
-   │  ├─ shelfSort.js
+   │  ├─ shelfSort.js        # orden de shelves y de productos por posición
+   │  ├─ identity.js         # nombre del usuario en localStorage
    │  └─ time.js
    ├─ hooks/useCountdown.js
-   ├─ context/ToastContext.jsx
+   ├─ context/ToastContext.jsx, LanguageContext.jsx
+   ├─ i18n/translations.js   # es/en
    ├─ components/
    │  ├─ BigButton.jsx, IconButton.jsx, SearchBar.jsx, CountdownChip.jsx
-   │  ├─ ShelfGroup.jsx, ProductRow.jsx, ProductEditModal.jsx
-   │  ├─ ReviewTable.jsx, AddOptionsSheet.jsx, BarcodeScannerView.jsx
+   │  ├─ ShelfGroup.jsx, ProductRow.jsx, ProductMatchCard.jsx, ProductEditModal.jsx
+   │  ├─ ProgressSummary.jsx, ReviewTable.jsx, AddOptionsSheet.jsx
+   │  ├─ BarcodeScannerView.jsx, JobQrModal.jsx, NamePrompt.jsx, LanguagePicker.jsx
    │  └─ EmptyState.jsx
    └─ pages/
       ├─ HomePage.jsx, NewJobPage.jsx, JobPage.jsx
       ├─ AddManualPage.jsx, PasteTextPage.jsx, PhotoOcrPage.jsx
       ├─ ReviewPage.jsx, ScanPage.jsx
+      ├─ ReferencePhotosPage.jsx, ReportPage.jsx
 ```
-
-## Configurar Firebase (una sola vez)
-
-La app no funciona como backend compartido hasta que `src/firebase/config.js` tenga los datos de un proyecto real de Firebase. Pasos en la [Consola de Firebase](https://console.firebase.google.com/):
-
-1. **Crear proyecto** → nombre cualquiera (ej. "shelf-finder"). No hace falta Google Analytics.
-2. **Firestore Database** → "Crear base de datos" → modo producción → la región más cercana.
-3. En la pestaña **Reglas** de Firestore, reemplazar el contenido por:
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /{document=**} {
-         allow read, write: if request.auth != null;
-       }
-     }
-   }
-   ```
-   Esto permite leer/escribir a cualquier sesión autenticada (incluida la anónima); la seguridad real depende de que el código de 6 letras de cada trabajo sea difícil de adivinar (33^6 ≈ 1290 millones de combinaciones), no de reglas por usuario.
-4. **Authentication** → "Comenzar" → pestaña Sign-in method → habilitar **Anónimo**. No se pide ni se muestra ningún login en la app; es solo para cumplir la regla del paso 3.
-5. **Configuración del proyecto** (ícono de engranaje) → "Tus apps" → ícono `</>` para agregar una app web → nombre cualquiera → no marcar Hosting.
-6. Copiar el objeto `firebaseConfig` que aparece (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId) y pegarlo en `src/firebase/config.js`, reemplazando los placeholders `REPLACE_WITH_...`.
-
-Ese objeto no es secreto — está pensado para viajar dentro del bundle del navegador; por eso va directo al código en vez de manejarse como variable de entorno.
 
 ## Correr el proyecto
 
@@ -170,7 +166,9 @@ npm run preview   # sirve dist/ para probar el build de producción
 npm run icons     # regenera los PNG de public/icons (no requiere ninguna librería de imágenes)
 ```
 
-### Instalar en el iPhone 15 Pro Max
+No hace falta configurar nada más — no hay claves de API, no hay proyecto en la nube que crear. La app funciona apenas se instalan las dependencias.
+
+### Instalar en el iPhone
 
 1. Servir la app por HTTPS (requisito de Safari para cámara + PWA instalable; en desarrollo, `localhost` cuenta como seguro, pero para probar en el teléfono real se necesita HTTPS o exponerlo vía una herramienta de túnel).
 2. Abrir la URL en Safari.
@@ -179,9 +177,7 @@ npm run icons     # regenera los PNG de public/icons (no requiere ninguna librer
 
 ## Limitaciones conocidas / próximos pasos
 
-- La app necesita internet la primera vez que arranca en un dispositivo (para el login anónimo) y para cualquier sincronización con el equipo; después de eso, Firestore sigue mostrando los datos ya descargados aunque se pierda la señal, y reintenta escribir cuando vuelve.
-- El plan gratuito de Firestore tiene una cuota diaria de lecturas/escrituras. Para el uso normal de un equipo pequeño no debería ser un problema (el escaneo usa una búsqueda puntual por UPC, no descarga todo el trabajo), pero vale la pena vigilarlo en la Consola si el uso crece mucho.
-- La seguridad de un trabajo depende de que su código de 6 letras no se comparta fuera del equipo — cualquiera con el código puede leerlo y editarlo, no hay control de acceso por persona.
+- Todo es local al dispositivo: un trabajo creado en un celular no es visible desde otro todavía. El código corto de 6 letras y la pantalla de QR ya existen pensados para "Modo equipo" (sync entre dispositivos), pero hoy `joinJob` solo resuelve trabajos que ya existen en el storage de ese mismo teléfono — ver la nota en `src/db/jobsRepo.js`.
 - Los íconos del manifest son un placeholder geométrico generado por script (`scripts/generate-icons.mjs`), pensado para reemplazarse por un ícono de marca real.
 - El primer uso de OCR en cada instalación necesita conexión a internet para descargar el modelo de idioma de Tesseract (luego queda cacheado por el service worker).
-- No hay un campo de "posición dentro del shelf" todavía — el modelo de `products` ya tiene espacio para agregarlo (`note`/`position`) sin cambios de esquema mayores si se necesita más adelante.
+- IndexedDB tiene cuota de almacenamiento por dispositivo/navegador; las fotos de referencia se comprimen antes de guardarse para no agotarla, pero un trabajo con muchísimas fotos de alta resolución podría acercarse al límite en teléfonos con poco espacio libre.

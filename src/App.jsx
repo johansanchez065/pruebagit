@@ -16,6 +16,10 @@ const PasteTextPage = lazy(() => import('./pages/PasteTextPage').then((m) => ({ 
 const PhotoOcrPage = lazy(() => import('./pages/PhotoOcrPage').then((m) => ({ default: m.PhotoOcrPage })));
 const ReviewPage = lazy(() => import('./pages/ReviewPage').then((m) => ({ default: m.ReviewPage })));
 const ScanPage = lazy(() => import('./pages/ScanPage').then((m) => ({ default: m.ScanPage })));
+const ReferencePhotosPage = lazy(() =>
+  import('./pages/ReferencePhotosPage').then((m) => ({ default: m.ReferencePhotosPage })),
+);
+const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })));
 
 function CleanupScheduler() {
   const showToast = useToast();
@@ -51,6 +55,8 @@ function AppRoutes() {
           <Route path="/jobs/:jobId/add/photo" element={<PhotoOcrPage />} />
           <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
           <Route path="/jobs/:jobId/scan" element={<ScanPage />} />
+          <Route path="/jobs/:jobId/photos" element={<ReferencePhotosPage />} />
+          <Route path="/jobs/:jobId/report" element={<ReportPage />} />
         </Routes>
       </Suspense>
     </ToastProvider>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { subscribeJob } from '../db/jobsRepo';
 import { subscribeShelves, findOrCreateShelf } from '../db/shelvesRepo';
 import { subscribeProducts, updateProduct, deleteProduct, setProductStatus } from '../db/productsRepo';
+import { listSearchHistory, recordSearch } from '../db/searchHistoryRepo';
 import { normalizeUpc } from '../lib/upc';
 import { sortShelves } from '../lib/shelfSort';
 import { getDisplayName, setDisplayName } from '../lib/identity';
@@ -12,6 +13,8 @@ import { CountdownChip } from '../components/CountdownChip';
 import { SearchBar } from '../components/SearchBar';
 import { ShelfGroup } from '../components/ShelfGroup';
 import { ProductRow } from '../components/ProductRow';
+import { ProductMatchCard } from '../components/ProductMatchCard';
+import { ProgressSummary } from '../components/ProgressSummary';
 import { ProductEditModal } from '../components/ProductEditModal';
 import { AddOptionsSheet } from '../components/AddOptionsSheet';
 import { EmptyState } from '../components/EmptyState';
@@ -30,6 +33,7 @@ export function JobPage() {
   const [job, setJob] = useState(undefined);
   const [shelves, setShelves] = useState([]);
   const [products, setProducts] = useState([]);
+  const [history, setHistory] = useState([]);
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState(null);
   const [showAddOptions, setShowAddOptions] = useState(false);
@@ -44,6 +48,7 @@ export function JobPage() {
     const unsubJob = subscribeJob(jobId, setJob);
     const unsubShelves = subscribeShelves(jobId, setShelves);
     const unsubProducts = subscribeProducts(jobId, setProducts);
+    listSearchHistory(jobId).then(setHistory);
     return () => {
       unsubJob();
       unsubShelves();
@@ -53,16 +58,38 @@ export function JobPage() {
 
   const shelfById = useMemo(() => new Map(shelves.map((s) => [s.id, s])), [shelves]);
 
+  const trimmedSearch = search.trim();
+
+  // Matches full UPC, any UPC substring (which covers "last 4/5/6 digits"
+  // since that's just a suffix substring), description, position, or shelf
+  // name — whichever the merchandiser happened to type.
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = trimmedSearch.toLowerCase();
     if (!query) return null;
     const queryDigits = normalizeUpc(query);
     return products.filter((p) => {
-      const nameMatch = p.name.toLowerCase().includes(query);
+      const descMatch = p.description.toLowerCase().includes(query);
       const upcMatch = queryDigits.length > 0 && p.upc.includes(queryDigits);
-      return nameMatch || upcMatch;
+      const positionMatch = p.position && p.position.toLowerCase().includes(query);
+      const shelfName = shelfById.get(p.shelfId)?.name || '';
+      const shelfMatch = shelfName.toLowerCase().includes(query);
+      return descMatch || upcMatch || positionMatch || shelfMatch;
     });
-  }, [products, search]);
+  }, [products, trimmedSearch, shelfById]);
+
+  const singleMatch = filtered && filtered.length === 1 ? filtered[0] : null;
+
+  // A search that narrows to exactly one product is worth remembering —
+  // logged once per distinct product, not on every keystroke that still
+  // resolves to the same one.
+  useEffect(() => {
+    if (!singleMatch) return;
+    const shelfName = shelfById.get(singleMatch.shelfId)?.name || '';
+    recordSearch(jobId, singleMatch, shelfName).then(() => {
+      listSearchHistory(jobId).then(setHistory);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [singleMatch?.id, jobId]);
 
   const grouped = useMemo(() => {
     const byShelf = new Map();
@@ -74,10 +101,28 @@ export function JobPage() {
     return sortShelves(shelves).map((shelf) => ({ shelf, products: byShelf.get(shelf.id) || [] }));
   }, [shelves, products]);
 
-  const handleSaveEdit = async ({ name, upc, shelf }) => {
+  const stats = useMemo(() => {
+    const total = products.length;
+    const found = products.filter((p) => p.status === 'found').length;
+    const notFound = products.filter((p) => p.status === 'not_found').length;
+    const pending = total - found - notFound;
+    const percent = total > 0 ? Math.round((found / total) * 100) : 0;
+    return { total, found, notFound, pending, percent };
+  }, [products]);
+
+  const handleSaveEdit = async ({ description, upc, shelf, position, stockcode, size, uom, facings }) => {
     try {
       const target = await findOrCreateShelf(jobId, shelf);
-      await updateProduct(jobId, editingProduct.id, { name, upc, shelfId: target.id });
+      await updateProduct(jobId, editingProduct.id, {
+        description,
+        upc,
+        shelfId: target.id,
+        position,
+        stockcode,
+        size,
+        uom,
+        facings,
+      });
       setEditingProduct(null);
       showToast(t('job.productUpdated'));
     } catch {
@@ -139,6 +184,14 @@ export function JobPage() {
     }
   };
 
+  const openEdit = (product) => {
+    setEditingProduct({ ...product, shelfName: shelfById.get(product.shelfId)?.name || '' });
+  };
+
+  const handleHistoryClick = (entry) => {
+    setSearch(entry.upc || entry.description);
+  };
+
   if (job === undefined) return null;
 
   if (job === null) {
@@ -183,9 +236,33 @@ export function JobPage() {
         </BigButton>
       </div>
 
+      {!trimmedSearch && history.length > 0 && (
+        <div className="history-block">
+          <div className="history-label">{t('job.recentSearchesLabel')}</div>
+          <div className="history-row">
+            {history.map((entry) => (
+              <button key={entry.id} type="button" className="history-chip" onClick={() => handleHistoryClick(entry)}>
+                {entry.description || entry.upc}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!trimmedSearch && stats.total > 0 && (
+        <ProgressSummary stats={stats} onClick={() => navigate(`/jobs/${jobId}/report`)} />
+      )}
+
       {filtered !== null ? (
         filtered.length === 0 ? (
           <EmptyState emoji="🔍" title={t('job.noResultsTitle')} subtitle={t('job.noResultsSubtitle')} />
+        ) : singleMatch ? (
+          <ProductMatchCard
+            product={singleMatch}
+            shelfName={shelfById.get(singleMatch.shelfId)?.name}
+            onClick={() => openEdit(singleMatch)}
+            onSetStatus={handleSetStatus}
+          />
         ) : (
           <div className="shelf-group">
             {filtered.map((product) => (
@@ -193,7 +270,7 @@ export function JobPage() {
                 key={product.id}
                 product={product}
                 shelfName={shelfById.get(product.shelfId)?.name}
-                onClick={() => setEditingProduct({ ...product, shelfName: shelfById.get(product.shelfId)?.name || '' })}
+                onClick={() => openEdit(product)}
                 onSetStatus={handleSetStatus}
               />
             ))}
@@ -207,7 +284,7 @@ export function JobPage() {
             key={shelf.id}
             shelf={shelf}
             products={shelfProducts}
-            onProductClick={(product) => setEditingProduct({ ...product, shelfName: shelf.name })}
+            onProductClick={openEdit}
             onSetStatus={handleSetStatus}
           />
         ))

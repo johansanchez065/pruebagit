@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findByUpc } from '../db/productsRepo';
 import { listShelves } from '../db/shelvesRepo';
+import { recordSearch } from '../db/searchHistoryRepo';
 import { BarcodeScannerView } from '../components/BarcodeScannerView';
 import { BigButton } from '../components/BigButton';
 import { useLanguage } from '../context/LanguageContext';
@@ -24,7 +25,9 @@ export function ScanPage() {
         }
         const shelves = await listShelves(jobId);
         const shelf = shelves.find((s) => s.id === product.shelfId);
-        setResult({ status: 'found', product, shelfName: shelf?.name || t('scan.noShelf') });
+        const shelfName = shelf?.name || t('scan.noShelf');
+        setResult({ status: 'found', product, shelfName });
+        recordSearch(jobId, product, shelfName);
       } catch {
         showToast(t('common.loadError'));
       }
@@ -49,10 +52,11 @@ export function ScanPage() {
             <>
               <div>{t('scan.found')}</div>
               <div className="product-row-name" style={{ fontSize: 20 }}>
-                {result.product.name}
+                {result.product.description}
               </div>
               <div className="upc">UPC: {result.product.upc}</div>
               <div className="shelf-badge">{result.shelfName}</div>
+              {result.product.position && <div className="upc">{t('scan.position', { position: result.product.position })}</div>}
             </>
           ) : (
             <>

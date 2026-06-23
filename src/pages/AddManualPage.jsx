@@ -13,25 +13,27 @@ export function AddManualPage() {
   const { t } = useLanguage();
 
   const [shelf, setShelf] = useState('');
-  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [upc, setUpc] = useState('');
+  const [position, setPosition] = useState('');
   const [shelfNames, setShelfNames] = useState([]);
 
   useEffect(() => {
     listShelves(jobId).then((shelves) => setShelfNames(shelves.map((s) => s.name)));
   }, [jobId]);
 
-  const valid = shelf.trim() && name.trim();
+  const valid = shelf.trim() && description.trim();
 
   const save = async ({ andContinue }) => {
     if (!valid) return;
     try {
       const targetShelf = await findOrCreateShelf(jobId, shelf);
-      await addProduct({ jobId, shelfId: targetShelf.id, name, upc });
+      await addProduct({ jobId, shelfId: targetShelf.id, description, upc, position });
       showToast(t('addManual.productAdded'));
       if (andContinue) {
-        setName('');
+        setDescription('');
         setUpc('');
+        setPosition('');
         if (!shelfNames.includes(targetShelf.name)) setShelfNames((prev) => [...prev, targetShelf.name]);
       } else {
         navigate(`/jobs/${jobId}`);
@@ -67,24 +69,35 @@ export function AddManualPage() {
       </div>
 
       <div className="field-group">
-        <label htmlFor="manual-name">{t('addManual.productLabel')}</label>
+        <label htmlFor="manual-description">{t('addManual.productLabel')}</label>
         <input
-          id="manual-name"
+          id="manual-description"
           placeholder={t('addManual.productPlaceholder')}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
         />
       </div>
 
-      <div className="field-group">
-        <label htmlFor="manual-upc">{t('addManual.upcLabel')}</label>
-        <input
-          id="manual-upc"
-          inputMode="numeric"
-          placeholder={t('addManual.upcPlaceholder')}
-          value={upc}
-          onChange={(e) => setUpc(e.target.value)}
-        />
+      <div className="review-row-grid">
+        <div className="field-group">
+          <label htmlFor="manual-upc">{t('addManual.upcLabel')}</label>
+          <input
+            id="manual-upc"
+            inputMode="numeric"
+            placeholder={t('addManual.upcPlaceholder')}
+            value={upc}
+            onChange={(e) => setUpc(e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label htmlFor="manual-position">{t('addManual.positionLabel')}</label>
+          <input
+            id="manual-position"
+            placeholder={t('addManual.positionPlaceholder')}
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+          />
+        </div>
       </div>
 
       <BigButton variant="primary" disabled={!valid} onClick={() => save({ andContinue: false })}>

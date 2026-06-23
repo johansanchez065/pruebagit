@@ -66,6 +66,9 @@ export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
         <BigButton variant="secondary" onClick={() => navigate(`/jobs/${jobId}/add/manual`)}>
           {t('addOptions.addManual')}
         </BigButton>
+        <BigButton variant="secondary" onClick={() => navigate(`/jobs/${jobId}/photos`)}>
+          {t('addOptions.referencePhotos')}
+        </BigButton>
         <BigButton variant="secondary" onClick={() => setCreatingShelf(true)}>
           {t('addOptions.createEmptyShelf')}
         </BigButton>

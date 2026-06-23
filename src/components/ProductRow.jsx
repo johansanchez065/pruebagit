@@ -8,11 +8,14 @@ export function ProductRow({ product, shelfName, onClick, onSetStatus }) {
   return (
     <div className="product-row" onClick={onClick} role="button" tabIndex={0}>
       <div className="product-row-main">
-        <div className="product-row-name">{product.name}</div>
+        <div className="product-row-name-line">
+          {product.position && <span className="product-row-position">{product.position}</span>}
+          <span className="product-row-name">{product.description}</span>
+        </div>
         <div className="product-row-upc">{product.upc || t('productRow.noUpc')}</div>
-        {product.status && (
+        {product.status !== 'pending' && (
           <div className={`product-row-status product-row-status--${isFound ? 'found' : 'missing'}`}>
-            {t(isFound ? 'productRow.foundBy' : 'productRow.notFoundBy', { name: product.statusBy })}
+            {t(isFound ? 'productRow.foundBy' : 'productRow.notFoundBy', { name: product.updatedBy })}
           </div>
         )}
       </div>

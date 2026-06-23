@@ -1,77 +1,65 @@
-import { collection, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
-import { db, ensureAuth, subscribeWithAuth } from '../firebase/config';
+import { getDb, newId, notifyJobChange, onJobChange } from './db';
 
 export function normalizeShelfName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function shelvesCollection(jobId) {
-  return collection(db, 'jobs', jobId, 'shelves');
-}
-
-// Deterministic from the normalized name: if two devices race to create the
-// same brand-new shelf, both writes target the same document instead of
-// producing two duplicate shelves.
-function shelfRef(jobId, normalizedName) {
-  return doc(shelvesCollection(jobId), encodeURIComponent(normalizedName));
-}
-
 export async function listShelves(jobId) {
-  await ensureAuth();
-  const snap = await getDocs(shelvesCollection(jobId));
-  return snap.docs.map((d) => d.data());
+  const db = await getDb();
+  return db.getAllFromIndex('shelves', 'jobId', jobId);
 }
 
 export function subscribeShelves(jobId, callback) {
-  return subscribeWithAuth(() =>
-    onSnapshot(shelvesCollection(jobId), (snap) => {
-      callback(snap.docs.map((d) => d.data()));
-    }),
-  );
+  let cancelled = false;
+  const load = () => {
+    listShelves(jobId).then((shelves) => {
+      if (!cancelled) callback(shelves);
+    });
+  };
+  load();
+  const unsubscribe = onJobChange(jobId, load);
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }
 
 // Returns the existing shelf for this job with a matching name (case/space
 // insensitive) or creates a new one, so re-photographing the same shelf never
 // produces a duplicate group.
 export async function findOrCreateShelf(jobId, rawName) {
-  await ensureAuth();
+  const db = await getDb();
   const normalizedName = normalizeShelfName(rawName);
-  const ref = shelfRef(jobId, normalizedName);
-  const existing = await getDoc(ref);
-  if (existing.exists()) return existing.data();
+  const existing = await db.getFromIndex('shelves', 'jobId_norm', [jobId, normalizedName]);
+  if (existing) return existing;
 
-  const shelf = { id: ref.id, jobId, name: rawName.trim(), normalizedName, createdAt: Date.now() };
-  await setDoc(ref, shelf);
+  const shelf = { id: newId(), jobId, name: rawName.trim(), normalizedName, createdAt: Date.now() };
+  await db.add('shelves', shelf);
+  notifyJobChange(jobId);
   return shelf;
 }
 
-// Bulk version for large pasted/OCR imports: resolves every shelf name in
-// parallel reads, then writes any brand-new shelves in chunked batches
-// instead of one sequential round trip per row.
+// Bulk version for large pasted/OCR imports: resolves every shelf name
+// against what already exists, then only creates the ones that are new — so
+// re-importing a sheet for a shelf that's already there just adds to it
+// instead of creating a duplicate.
 export async function resolveShelvesBulk(jobId, rawNames) {
-  await ensureAuth();
+  const db = await getDb();
   const uniqueNames = [...new Set(rawNames.map((n) => n.trim()))];
-  const refs = uniqueNames.map((name) => ({ name, ref: shelfRef(jobId, normalizeShelfName(name)) }));
-  const snaps = await Promise.all(refs.map(({ ref }) => getDoc(ref)));
-
   const byName = new Map();
-  const toCreate = [];
-  refs.forEach(({ name, ref }, i) => {
-    const snap = snaps[i];
-    if (snap.exists()) {
-      byName.set(name, snap.data());
-    } else {
-      const shelf = { id: ref.id, jobId, name, normalizedName: normalizeShelfName(name), createdAt: Date.now() };
-      byName.set(name, shelf);
-      toCreate.push({ ref, shelf });
-    }
-  });
 
-  for (let i = 0; i < toCreate.length; i += 450) {
-    const batch = writeBatch(db);
-    for (const { ref, shelf } of toCreate.slice(i, i + 450)) batch.set(ref, shelf);
-    await batch.commit();
+  for (const name of uniqueNames) {
+    const normalizedName = normalizeShelfName(name);
+    const existing = await db.getFromIndex('shelves', 'jobId_norm', [jobId, normalizedName]);
+    if (existing) {
+      byName.set(name, existing);
+    } else {
+      const shelf = { id: newId(), jobId, name, normalizedName, createdAt: Date.now() };
+      await db.add('shelves', shelf);
+      byName.set(name, shelf);
+    }
   }
 
+  notifyJobChange(jobId);
   return byName;
 }

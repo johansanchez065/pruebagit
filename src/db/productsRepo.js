@@ -1,120 +1,142 @@
-import {
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  setDoc,
-  deleteDoc,
-  updateDoc,
-  where,
-  writeBatch,
-} from 'firebase/firestore';
-import { db, ensureAuth, subscribeWithAuth } from '../firebase/config';
+import { getDb, newId, notifyJobChange, onJobChange } from './db';
 import { normalizeUpc, upcVariants } from '../lib/upc';
 
-function productsCollection(jobId) {
-  return collection(db, 'jobs', jobId, 'products');
-}
-
-function productRef(jobId, id) {
-  return doc(productsCollection(jobId), id);
+// Older local records (from before this field set existed) only ever had
+// {id, jobId, shelfId, name, upc, createdAt} — this fills in every new field
+// with a sane default so the rest of the app can always read the full shape,
+// regardless of how old the record is.
+function normalizeProduct(p) {
+  const description = p.description ?? p.name ?? '';
+  return {
+    position: '',
+    stockcode: '',
+    size: '',
+    uom: '',
+    facings: '',
+    status: 'pending',
+    updatedBy: null,
+    updatedAt: null,
+    ...p,
+    description,
+    name: description,
+  };
 }
 
 export async function listProducts(jobId) {
-  await ensureAuth();
-  const snap = await getDocs(productsCollection(jobId));
-  return snap.docs.map((d) => d.data());
+  const db = await getDb();
+  const products = await db.getAllFromIndex('products', 'jobId', jobId);
+  return products.map(normalizeProduct);
 }
 
 export function subscribeProducts(jobId, callback) {
-  return subscribeWithAuth(() =>
-    onSnapshot(productsCollection(jobId), (snap) => {
-      callback(snap.docs.map((d) => d.data()));
-    }),
-  );
+  let cancelled = false;
+  const load = () => {
+    listProducts(jobId).then((products) => {
+      if (!cancelled) callback(products);
+    });
+  };
+  load();
+  const unsubscribe = onJobChange(jobId, load);
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }
 
-export async function addProduct({ jobId, shelfId, name, upc }) {
-  await ensureAuth();
-  const ref = doc(productsCollection(jobId));
-  const product = { id: ref.id, jobId, shelfId, name: name.trim(), upc: normalizeUpc(upc), createdAt: Date.now() };
-  await setDoc(ref, product);
-  return product;
+export async function addProduct({ jobId, shelfId, description, upc, position, stockcode, size, uom, facings }) {
+  const db = await getDb();
+  const product = {
+    id: newId(),
+    jobId,
+    shelfId,
+    description: (description || '').trim(),
+    upc: normalizeUpc(upc),
+    position: (position ?? '').toString().trim(),
+    stockcode: (stockcode ?? '').toString().trim(),
+    size: (size ?? '').toString().trim(),
+    uom: (uom ?? '').toString().trim(),
+    facings: (facings ?? '').toString().trim(),
+    status: 'pending',
+    updatedBy: null,
+    updatedAt: null,
+    createdAt: Date.now(),
+  };
+  await db.add('products', product);
+  notifyJobChange(jobId);
+  return normalizeProduct(product);
 }
 
-// Partial update (not read+overwrite): a concurrent status tap from a
-// teammate while this edit is in flight must not get clobbered.
 export async function updateProduct(jobId, id, changes) {
-  await ensureAuth();
+  const db = await getDb();
+  const existing = await db.get('products', id);
+  if (!existing) return null;
   const patch = { ...changes };
-  if (patch.name !== undefined) patch.name = patch.name.trim();
+  if (patch.description !== undefined) patch.description = patch.description.trim();
   if (patch.upc !== undefined) patch.upc = normalizeUpc(patch.upc);
-  await updateDoc(productRef(jobId, id), patch);
+  const updated = { ...existing, ...patch };
+  await db.put('products', updated);
+  notifyJobChange(jobId);
+  return normalizeProduct(updated);
 }
 
-// 1-tap collaboration: marks a product found/not-found with who and when,
-// without touching name/UPC/shelf. `status: null` clears it back to pending.
+// 1-tap status marking: records who and when, without touching the rest of
+// the product. Passing `status: null` clears it back to pending.
 export async function setProductStatus(jobId, id, status, by) {
-  await ensureAuth();
-  const ref = productRef(jobId, id);
-  if (status === null) {
-    await updateDoc(ref, { status: deleteField(), statusBy: deleteField(), statusAt: deleteField() });
-  } else {
-    await updateDoc(ref, { status, statusBy: by, statusAt: Date.now() });
-  }
+  const db = await getDb();
+  const existing = await db.get('products', id);
+  if (!existing) return null;
+  const updated =
+    status === null
+      ? { ...existing, status: 'pending', updatedBy: null, updatedAt: null }
+      : { ...existing, status, updatedBy: by, updatedAt: Date.now() };
+  await db.put('products', updated);
+  notifyJobChange(jobId);
+  return normalizeProduct(updated);
 }
 
 export async function deleteProduct(jobId, id) {
-  await ensureAuth();
-  await deleteDoc(productRef(jobId, id));
+  const db = await getDb();
+  await db.delete('products', id);
+  notifyJobChange(jobId);
 }
 
-// Bulk version for large pasted/OCR imports: writes in chunked batches
-// instead of one sequential round trip per row, so a 1000+ row job doesn't
-// take minutes to save over the network.
+// Bulk version for large pasted/OCR imports — adds every row in one
+// transaction instead of one round trip per row, so a 1000+ row import
+// stays fast.
 export async function addProductsBulk(jobId, items) {
-  await ensureAuth();
-  const entries = items.map((item) => {
-    const ref = doc(productsCollection(jobId));
-    return {
-      ref,
-      product: {
-        id: ref.id,
-        jobId,
-        shelfId: item.shelfId,
-        name: item.name.trim(),
-        upc: normalizeUpc(item.upc),
-        createdAt: Date.now(),
-      },
-    };
-  });
-
-  for (let i = 0; i < entries.length; i += 450) {
-    const batch = writeBatch(db);
-    for (const { ref, product } of entries.slice(i, i + 450)) batch.set(ref, product);
-    await batch.commit();
-  }
-
-  return entries.map((e) => e.product);
+  const db = await getDb();
+  const tx = db.transaction('products', 'readwrite');
+  const now = Date.now();
+  const products = items.map((item) => ({
+    id: newId(),
+    jobId,
+    shelfId: item.shelfId,
+    description: (item.description || '').trim(),
+    upc: normalizeUpc(item.upc),
+    position: (item.position ?? '').toString().trim(),
+    stockcode: (item.stockcode ?? '').toString().trim(),
+    size: (item.size ?? '').toString().trim(),
+    uom: (item.uom ?? '').toString().trim(),
+    facings: (item.facings ?? '').toString().trim(),
+    status: 'pending',
+    updatedBy: null,
+    updatedAt: null,
+    createdAt: now,
+  }));
+  await Promise.all(products.map((product) => tx.store.add(product)));
+  await tx.done;
+  notifyJobChange(jobId);
+  return products.map(normalizeProduct);
 }
 
 // Tries an exact match first, then falls back to UPC-A/EAN-13 leading-zero
 // variants so a scan still resolves even if the printed sheet used the other
-// numbering convention. Uses a targeted `in` query instead of fetching the
-// whole products collection, since a job can hold 1000+ products and every
-// scan would otherwise burn through Firestore's free-tier read quota.
+// numbering convention.
 export async function findByUpc(jobId, rawUpc) {
-  const variants = upcVariants(rawUpc);
-  if (!variants[0]) return null;
-  await ensureAuth();
-  const snap = await getDocs(query(productsCollection(jobId), where('upc', 'in', variants)));
-  if (snap.empty) return null;
-  const byUpc = new Map(snap.docs.map((d) => [d.data().upc, d.data()]));
-  for (const variant of variants) {
-    if (byUpc.has(variant)) return byUpc.get(variant);
+  const db = await getDb();
+  for (const variant of upcVariants(rawUpc)) {
+    const match = await db.getFromIndex('products', 'jobId_upc', [jobId, variant]);
+    if (match) return normalizeProduct(match);
   }
   return null;
 }

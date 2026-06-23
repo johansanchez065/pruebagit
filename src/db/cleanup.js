@@ -1,17 +1,20 @@
-import { JOB_TTL_MS, deleteJob, listRecentJobs } from './jobsRepo';
+import { getDb } from './db';
+import { JOB_TTL_MS, deleteJob } from './jobsRepo';
 
-// Sweeps every job this device knows about (created or joined) that's older
-// than 48h and cascades the delete to its shelves and products. There is no
-// manual "finish job" action by design — the user only ever creates jobs,
-// and the app forgets them on its own. Jobs live in a shared Firestore
-// collection now, so this intentionally only ever touches jobs this device
-// has in its local recents list, never the whole collection.
+// Sweeps every job on this device older than 48h and cascades the delete to
+// its shelves, products, photos and search history. There is no manual
+// "finish job" action by design — the user only ever creates jobs, and the
+// app forgets them on its own.
 export async function purgeExpiredJobs() {
+  const db = await getDb();
   const now = Date.now();
-  const expired = listRecentJobs().filter((job) => now - job.createdAt > JOB_TTL_MS);
+  const jobs = await db.getAll('jobs');
+  const expired = jobs.filter((job) => now - job.createdAt > JOB_TTL_MS);
+
   for (const job of expired) {
     await deleteJob(job.id);
   }
+
   return expired.map((job) => job.id);
 }
 

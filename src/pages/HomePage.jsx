@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listRecentJobs, deleteJob, joinJob } from '../db/jobsRepo';
 import { BigButton } from '../components/BigButton';
@@ -35,12 +35,18 @@ export function HomePage() {
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
   const showToast = useToast();
-  const [jobs, setJobs] = useState(() => listRecentJobs());
+  const [jobs, setJobs] = useState([]);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [scanningQr, setScanningQr] = useState(false);
 
-  const refresh = () => setJobs(listRecentJobs());
+  const refresh = () => {
+    listRecentJobs().then(setJobs);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const handleDelete = async (job) => {
     if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;

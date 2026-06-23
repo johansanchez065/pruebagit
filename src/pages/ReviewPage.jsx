@@ -10,7 +10,17 @@ import { useLanguage } from '../context/LanguageContext';
 
 let rowCounter = 0;
 function blankRow(shelf = '') {
-  return { rowId: `new-${Date.now()}-${rowCounter++}`, shelf, name: '', upc: '' };
+  return {
+    rowId: `new-${Date.now()}-${rowCounter++}`,
+    shelf,
+    position: '',
+    description: '',
+    upc: '',
+    stockcode: '',
+    size: '',
+    uom: '',
+    facings: '',
+  };
 }
 
 export function ReviewPage() {
@@ -42,20 +52,28 @@ export function ReviewPage() {
   };
 
   const confirmSave = async () => {
-    const valid = rows.filter((row) => row.name.trim());
+    // A row only needs a description OR a upc to be worth keeping — a
+    // completely untouched blank row (added by mistake) is the only thing
+    // silently dropped here.
+    const valid = rows.filter((row) => row.description.trim() || row.upc.trim());
     if (valid.length === 0) return;
     setSaving(true);
     try {
       // Resolves/creates every shelf in batched writes and saves every
       // product in batched writes too, instead of one sequential round trip
       // per row — a 1000+ row import would otherwise take minutes over the
-      // network.
+      // network. Shelves that already exist get reused, never duplicated.
       const shelfLabels = valid.map((row) => row.shelf.trim() || t('review.noShelfLabel'));
       const shelvesByLabel = await resolveShelvesBulk(jobId, shelfLabels);
       const items = valid.map((row, i) => ({
         shelfId: shelvesByLabel.get(shelfLabels[i]).id,
-        name: row.name,
+        description: row.description,
         upc: row.upc,
+        position: row.position,
+        stockcode: row.stockcode,
+        size: row.size,
+        uom: row.uom,
+        facings: row.facings,
       }));
       await addProductsBulk(jobId, items);
       showToast(t('review.savedToast', { count: valid.length }));
