@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { subscribeJob } from '../db/jobsRepo';
+import { subscribeJob, deleteJob } from '../db/jobsRepo';
 import { subscribeShelves, findOrCreateShelf } from '../db/shelvesRepo';
 import { subscribeProducts, updateProduct, deleteProduct, setProductStatus } from '../db/productsRepo';
 import { listSearchHistory, recordSearch } from '../db/searchHistoryRepo';
@@ -184,6 +184,19 @@ export function JobPage() {
     }
   };
 
+  // Same delete + confirm as the HomePage job card, but reachable without
+  // leaving the job — needed mid-test when an OCR import comes out wrong and
+  // the fastest fix is wiping the job and re-importing from zero.
+  const handleDeleteJob = async () => {
+    if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;
+    try {
+      await deleteJob(jobId);
+      navigate('/');
+    } catch {
+      showToast(t('common.saveError'));
+    }
+  };
+
   const openEdit = (product) => {
     setEditingProduct({ ...product, shelfName: shelfById.get(product.shelfId)?.name || '' });
   };
@@ -222,6 +235,9 @@ export function JobPage() {
         </button>
         <IconButton label={t('job.showQr')} onClick={() => setShowQr(true)}>
           ▦
+        </IconButton>
+        <IconButton variant="danger" label={t('home.deleteJobLabel')} onClick={handleDeleteJob}>
+          🗑
         </IconButton>
       </div>
 
