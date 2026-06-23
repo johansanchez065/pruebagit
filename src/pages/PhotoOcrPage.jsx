@@ -39,8 +39,8 @@ export function PhotoOcrPage() {
   };
 
   const handleContinue = () => {
-    const rows = parseSheetText(text, { defaultShelf: shelf.trim() });
-    navigate(`/jobs/${jobId}/review`, { state: { rows } });
+    const { rows, warnings } = parseSheetText(text, { defaultShelf: shelf.trim() });
+    navigate(`/jobs/${jobId}/review`, { state: { rows, warnings } });
   };
 
   const retake = () => {

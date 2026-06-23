@@ -101,11 +101,16 @@ export const translations = {
     'review.alert.upcEmpty': 'UPC vacío',
     'review.alert.upcLetters': 'UPC con letras',
     'review.alert.upcTooShort': 'UPC muy corto',
+    'review.alert.upcTooLong': 'UPC muy largo',
     'review.alert.upcDuplicate': 'UPC duplicado',
     'review.alert.shelfMissing': 'Falta shelf',
     'review.alert.positionMissing': 'Falta position',
     'review.alert.positionDuplicate': 'Position duplicada',
     'review.alert.descriptionEmpty': 'Descripción vacía',
+    'review.warning.positionUpcMismatch':
+      'Se detectaron {positions} posiciones pero {upcs} UPC al leer por columnas — revisa el emparejado de filas.',
+    'review.warning.upcDescriptionMismatch':
+      'Se detectaron {upcs} UPC pero {descriptions} descripciones al leer por columnas — revisa el emparejado de filas.',
 
     'scan.title': 'Escanear código',
     'scan.found': 'Producto encontrado',
@@ -308,11 +313,16 @@ export const translations = {
     'review.alert.upcEmpty': 'Empty UPC',
     'review.alert.upcLetters': 'UPC has letters',
     'review.alert.upcTooShort': 'UPC too short',
+    'review.alert.upcTooLong': 'UPC too long',
     'review.alert.upcDuplicate': 'Duplicate UPC',
     'review.alert.shelfMissing': 'Missing shelf',
     'review.alert.positionMissing': 'Missing position',
     'review.alert.positionDuplicate': 'Duplicate position',
     'review.alert.descriptionEmpty': 'Empty description',
+    'review.warning.positionUpcMismatch':
+      'Detected {positions} positions but {upcs} UPCs reading by columns — check the row pairing.',
+    'review.warning.upcDescriptionMismatch':
+      'Detected {upcs} UPCs but {descriptions} descriptions reading by columns — check the row pairing.',
 
     'scan.title': 'Scan code',
     'scan.found': 'Product found',

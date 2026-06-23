@@ -33,6 +33,7 @@ export function ReviewPage() {
   const [rows, setRows] = useState(location.state?.rows ?? []);
   const [shelfNames, setShelfNames] = useState([]);
   const [saving, setSaving] = useState(false);
+  const parseWarnings = location.state?.warnings ?? [];
 
   useEffect(() => {
     listShelves(jobId).then((shelves) => setShelfNames(shelves.map((s) => s.name)));
@@ -92,6 +93,16 @@ export function ReviewPage() {
         </button>
         <h1>{t('review.title')}</h1>
       </div>
+
+      {parseWarnings.length > 0 && (
+        <div className="card">
+          {parseWarnings.map((warning, i) => (
+            <p key={i} className="helper-text">
+              {t(warning.key, warning.params)}
+            </p>
+          ))}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState emoji="🧐" title={t('review.noRowsTitle')} subtitle={t('review.noRowsSubtitle')}>

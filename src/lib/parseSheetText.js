@@ -38,6 +38,32 @@ function isHeaderLine(line) {
 // product data on its own line — same kind of noise as the header row.
 const NOISE_LINE_RE = /^totals?:?$/i;
 
+// iPhone's "copy text" on a Photos screenshot reads the table column by
+// column instead of row by row: every Position value, then every UPC, then
+// every description, each as its own line, headers included. None of those
+// lines carry enough on one line to match REPORT_ROW_RE/PRODUCT_LINE_RE
+// (which both need a UPC and description together), so row-mode would catch
+// every one of them as an unparsed single-field row. Column mode instead
+// buckets each line by what it looks like, then pairs the buckets by index.
+const COLUMN_POSITION_RE = /^\d{1,3}$/;
+const COLUMN_UPC_RE = /^\d{9,14}$/;
+
+// Same header words as HEADER_KEYWORDS, but matched as a whole line on its
+// own (column-pasted headers arrive one word/phrase per line, so the
+// "2+ keywords in one line" test isHeaderLine() uses would never fire).
+const COLUMN_HEADER_LINES = new Set([
+  ...HEADER_KEYWORDS,
+  'long description',
+  'totals',
+  'total',
+  'pack out',
+  'case pack',
+]);
+
+function isColumnHeaderLine(line) {
+  return COLUMN_HEADER_LINES.has(line.toLowerCase().trim());
+}
+
 let unassignedCounter = 0;
 
 function blankRow(shelf) {
@@ -58,23 +84,9 @@ function nextRowId() {
   return `row-${Date.now()}-${unassignedCounter++}`;
 }
 
-// Parses the plain text extracted from a planogram sheet (either via OCR or
-// pasted by hand) into draft rows for the review screen. Nothing here is
-// persisted — every row, including unparsed/noisy lines, is surfaced so the
-// user can fix or discard it before it touches the database.
-//
-// `defaultShelf` is the shelf the user is currently photographing/pasting —
-// most imports are one shelf at a time, so every row defaults to it unless a
-// `Shelf:` header line inside the text itself overrides it for the rows that
-// follow.
-export function parseSheetText(text, { defaultShelf = '' } = {}) {
+function parseRowMode(lines, defaultShelf) {
   const rows = [];
   let currentShelf = defaultShelf;
-
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 
   for (const line of lines) {
     const headerMatch = line.match(SHELF_HEADER_RE);
@@ -112,8 +124,9 @@ export function parseSheetText(text, { defaultShelf = '' } = {}) {
       continue;
     }
 
-    // Couldn't confidently split description/UPC (common with OCR noise) —
-    // keep the raw line as an editable row instead of silently dropping it.
+    // Couldn't confidently split description/UPC (common with OCR noise, or
+    // a column-pasted line that's just one bare field) — keep the raw line
+    // as an editable row instead of silently dropping it.
     rows.push({
       ...blankRow(currentShelf),
       rowId: nextRowId(),
@@ -122,4 +135,97 @@ export function parseSheetText(text, { defaultShelf = '' } = {}) {
   }
 
   return rows;
+}
+
+// In real row-mode input, almost every row matches REPORT_ROW_RE or
+// PRODUCT_LINE_RE and therefore already carries a UPC; only genuine noise
+// lines fall through to the bare catch-all above. Column-pasted text is the
+// opposite: every line is exactly one field, so row-mode can never pair a
+// UPC with anything and the catch-all swallows the whole sheet. A high
+// fraction of UPC-less rows is what tells the two apart.
+function isRowModeUnreliable(rows) {
+  if (rows.length === 0) return false;
+  const missingUpc = rows.filter((row) => !row.upc.trim()).length;
+  return missingUpc / rows.length > 0.5;
+}
+
+function parseColumnMode(lines, defaultShelf) {
+  const positions = [];
+  const upcs = [];
+  const descriptions = [];
+
+  for (const line of lines) {
+    if (isColumnHeaderLine(line) || NOISE_LINE_RE.test(line)) continue;
+    if (COLUMN_UPC_RE.test(line)) {
+      upcs.push(line);
+    } else if (COLUMN_POSITION_RE.test(line)) {
+      positions.push(line);
+    } else if (/[A-Za-z]/.test(line)) {
+      descriptions.push(line);
+    }
+    // Anything else (a lone stockcode/size/uom column, for example) isn't
+    // one of the three fields this mode reconstructs, so it's skipped
+    // rather than guessed at.
+  }
+
+  const count = Math.max(positions.length, upcs.length, descriptions.length);
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    rows.push({
+      ...blankRow(defaultShelf),
+      rowId: nextRowId(),
+      position: positions[i] || '',
+      upc: upcs[i] || '',
+      description: descriptions[i] || '',
+    });
+  }
+
+  const warnings = [];
+  if (positions.length && upcs.length && positions.length !== upcs.length) {
+    warnings.push({
+      key: 'review.warning.positionUpcMismatch',
+      params: { positions: positions.length, upcs: upcs.length },
+    });
+  }
+  if (upcs.length && descriptions.length && upcs.length !== descriptions.length) {
+    warnings.push({
+      key: 'review.warning.upcDescriptionMismatch',
+      params: { upcs: upcs.length, descriptions: descriptions.length },
+    });
+  }
+
+  return { rows, warnings };
+}
+
+// Parses the plain text extracted from a planogram sheet (either via OCR or
+// pasted by hand) into draft rows for the review screen. Nothing here is
+// persisted — every row, including unparsed/noisy lines, is surfaced so the
+// user can fix or discard it before it touches the database.
+//
+// `defaultShelf` is the shelf the user is currently photographing/pasting —
+// most imports are one shelf at a time, so every row defaults to it unless a
+// `Shelf:` header line inside the text itself overrides it for the rows that
+// follow.
+//
+// Row-mode (one product per line) is tried first since it's the common
+// case. iPhone's "copy text" from a Photos screenshot instead pastes a
+// table column by column, which row-mode can't reconstruct — when row-mode
+// output looks unreliable, column-mode is tried as a fallback and used only
+// if it actually finds data.
+export function parseSheetText(text, { defaultShelf = '' } = {}) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const rowModeRows = parseRowMode(lines, defaultShelf);
+  if (!isRowModeUnreliable(rowModeRows)) {
+    return { rows: rowModeRows, warnings: [] };
+  }
+
+  const columnResult = parseColumnMode(lines, defaultShelf);
+  if (columnResult.rows.length === 0) {
+    return { rows: rowModeRows, warnings: [] };
+  }
+  return columnResult;
 }

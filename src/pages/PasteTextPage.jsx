@@ -18,8 +18,8 @@ export function PasteTextPage() {
   }, [jobId]);
 
   const handleProcess = () => {
-    const rows = parseSheetText(text, { defaultShelf: shelf.trim() });
-    navigate(`/jobs/${jobId}/review`, { state: { rows } });
+    const { rows, warnings } = parseSheetText(text, { defaultShelf: shelf.trim() });
+    navigate(`/jobs/${jobId}/review`, { state: { rows, warnings } });
   };
 
   return (

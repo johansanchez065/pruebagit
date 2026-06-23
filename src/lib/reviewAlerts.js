@@ -1,9 +1,13 @@
-const MIN_UPC_LENGTH = 6;
+// Real UPCs run 9-14 digits; outside that range is almost always a
+// misread or a column-pasted field landing in the wrong place.
+const MIN_UPC_LENGTH = 9;
+const MAX_UPC_LENGTH = 14;
 
 const ALERTS = {
   upcEmpty: { key: 'review.alert.upcEmpty', severity: 'critical' },
   upcLetters: { key: 'review.alert.upcLetters', severity: 'critical' },
   upcTooShort: { key: 'review.alert.upcTooShort', severity: 'warning' },
+  upcTooLong: { key: 'review.alert.upcTooLong', severity: 'warning' },
   upcDuplicate: { key: 'review.alert.upcDuplicate', severity: 'warning' },
   shelfMissing: { key: 'review.alert.shelfMissing', severity: 'critical' },
   positionMissing: { key: 'review.alert.positionMissing', severity: 'warning' },
@@ -39,6 +43,7 @@ export function getRowAlerts(rows) {
     if (!upc) alerts.push(ALERTS.upcEmpty);
     else if (/[A-Za-z]/.test(upc)) alerts.push(ALERTS.upcLetters);
     else if (upc.length < MIN_UPC_LENGTH) alerts.push(ALERTS.upcTooShort);
+    else if (upc.length > MAX_UPC_LENGTH) alerts.push(ALERTS.upcTooLong);
     if (upc && upcCounts.get(upc) > 1) alerts.push(ALERTS.upcDuplicate);
 
     if (!row.shelf || !row.shelf.trim()) alerts.push(ALERTS.shelfMissing);
