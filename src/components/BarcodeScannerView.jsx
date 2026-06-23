@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { startBarcodeScanner } from '../lib/barcode';
 import { useLanguage } from '../context/LanguageContext';
 
-export function BarcodeScannerView({ onDetect }) {
+export function BarcodeScannerView({ onDetect, mode = 'retail' }) {
   const { t } = useLanguage();
   const videoRef = useRef(null);
   const lastDetectionRef = useRef({ code: null, at: 0 });
@@ -27,6 +27,7 @@ export function BarcodeScannerView({ onDetect }) {
       videoElement: videoRef.current,
       onDetect: handleDetect,
       onError: () => {},
+      mode,
     })
       .then((c) => {
         if (cancelled) c.stop();
@@ -38,7 +39,7 @@ export function BarcodeScannerView({ onDetect }) {
       cancelled = true;
       controls?.stop();
     };
-  }, [onDetect, t]);
+  }, [onDetect, mode, t]);
 
   return (
     <div className="scanner-view">

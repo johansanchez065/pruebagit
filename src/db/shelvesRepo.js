@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
-import { db, ensureAuth } from '../firebase/config';
+import { db, ensureAuth, subscribeWithAuth } from '../firebase/config';
 
 export function normalizeShelfName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -23,18 +23,11 @@ export async function listShelves(jobId) {
 }
 
 export function subscribeShelves(jobId, callback) {
-  let unsubscribe = () => {};
-  let cancelled = false;
-  ensureAuth().then(() => {
-    if (cancelled) return;
-    unsubscribe = onSnapshot(shelvesCollection(jobId), (snap) => {
+  return subscribeWithAuth(() =>
+    onSnapshot(shelvesCollection(jobId), (snap) => {
       callback(snap.docs.map((d) => d.data()));
-    });
-  });
-  return () => {
-    cancelled = true;
-    unsubscribe();
-  };
+    }),
+  );
 }
 
 // Returns the existing shelf for this job with a matching name (case/space

@@ -16,6 +16,8 @@ export const translations = {
     'home.joinPlaceholder': 'Código de 6 letras',
     'home.join': 'Unirse',
     'home.joinNotFound': 'No existe ningún trabajo con ese código.',
+    'home.scanQr': 'Escanear QR para unirse',
+    'home.scanQrTitle': 'Escanear código QR',
 
     'newJob.title': 'Nuevo trabajo',
     'newJob.nameLabel': 'Nombre del trabajo',
@@ -37,6 +39,10 @@ export const translations = {
     'job.shelfCreated': 'Shelf creado',
     'job.codeLabel': 'Código: {code} (toca para copiar)',
     'job.codeCopied': 'Código copiado',
+    'job.showQr': 'Mostrar código QR',
+    'job.qrTitle': 'Código QR del trabajo',
+    'job.qrAlt': 'Código QR para unirse al trabajo',
+    'job.qrHelper': 'Tu compañero puede escanear este código para entrar directo a este trabajo, sin escribir nada.',
 
     'addManual.title': 'Agregar manual',
     'addManual.shelfLabel': 'Shelf',
@@ -111,6 +117,17 @@ export const translations = {
     'productEdit.cancel': 'Cancelar',
 
     'productRow.noUpc': 'Sin UPC',
+    'productRow.markFound': 'Marcar como encontrado',
+    'productRow.markNotFound': 'Marcar como no encontrado',
+    'productRow.foundBy': 'Encontrado por {name}',
+    'productRow.notFoundBy': 'No lo vio {name}',
+
+    'namePrompt.title': '¿Cómo te llamas?',
+    'namePrompt.helper': 'Así tus compañeros saben quién marcó cada producto. Solo se pregunta una vez por celular.',
+    'namePrompt.placeholder': 'Tu nombre',
+    'namePrompt.confirm': 'Continuar',
+    'namePrompt.skip': 'Omitir',
+    'namePrompt.fallbackName': 'Alguien',
 
     'searchBar.placeholder': 'Buscar por UPC o nombre...',
     'searchBar.clearLabel': 'Limpiar',
@@ -119,6 +136,8 @@ export const translations = {
     'toast.jobsPurged': 'Se borraron trabajos vencidos (48h)',
 
     'common.back': 'Volver',
+    'common.saveError': 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.',
+    'common.loadError': 'No se pudo cargar. Revisa tu conexión e intenta de nuevo.',
 
     'time.expired': 'Expirado',
     'time.minSuffix': 'min',
@@ -141,6 +160,8 @@ export const translations = {
     'home.joinPlaceholder': '6-letter code',
     'home.join': 'Join',
     'home.joinNotFound': "No job exists with that code.",
+    'home.scanQr': 'Scan QR to join',
+    'home.scanQrTitle': 'Scan QR code',
 
     'newJob.title': 'New job',
     'newJob.nameLabel': 'Job name',
@@ -162,6 +183,10 @@ export const translations = {
     'job.shelfCreated': 'Shelf created',
     'job.codeLabel': 'Code: {code} (tap to copy)',
     'job.codeCopied': 'Code copied',
+    'job.showQr': 'Show QR code',
+    'job.qrTitle': 'Job QR code',
+    'job.qrAlt': 'QR code to join this job',
+    'job.qrHelper': "Your teammate can scan this code to jump straight into this job, no typing needed.",
 
     'addManual.title': 'Add manually',
     'addManual.shelfLabel': 'Shelf',
@@ -236,6 +261,17 @@ export const translations = {
     'productEdit.cancel': 'Cancel',
 
     'productRow.noUpc': 'No UPC',
+    'productRow.markFound': 'Mark as found',
+    'productRow.markNotFound': 'Mark as not found',
+    'productRow.foundBy': 'Found by {name}',
+    'productRow.notFoundBy': 'Not found by {name}',
+
+    'namePrompt.title': "What's your name?",
+    'namePrompt.helper': 'So teammates know who marked each product. Only asked once per phone.',
+    'namePrompt.placeholder': 'Your name',
+    'namePrompt.confirm': 'Continue',
+    'namePrompt.skip': 'Skip',
+    'namePrompt.fallbackName': 'Someone',
 
     'searchBar.placeholder': 'Search by UPC or name...',
     'searchBar.clearLabel': 'Clear',
@@ -244,6 +280,8 @@ export const translations = {
     'toast.jobsPurged': 'Expired jobs were deleted (48h)',
 
     'common.back': 'Back',
+    'common.saveError': "Couldn't save. Check your connection and try again.",
+    'common.loadError': "Couldn't load. Check your connection and try again.",
 
     'time.expired': 'Expired',
     'time.minSuffix': 'min',

@@ -25,15 +25,19 @@ export function AddManualPage() {
 
   const save = async ({ andContinue }) => {
     if (!valid) return;
-    const targetShelf = await findOrCreateShelf(jobId, shelf);
-    await addProduct({ jobId, shelfId: targetShelf.id, name, upc });
-    showToast(t('addManual.productAdded'));
-    if (andContinue) {
-      setName('');
-      setUpc('');
-      if (!shelfNames.includes(targetShelf.name)) setShelfNames((prev) => [...prev, targetShelf.name]);
-    } else {
-      navigate(`/jobs/${jobId}`);
+    try {
+      const targetShelf = await findOrCreateShelf(jobId, shelf);
+      await addProduct({ jobId, shelfId: targetShelf.id, name, upc });
+      showToast(t('addManual.productAdded'));
+      if (andContinue) {
+        setName('');
+        setUpc('');
+        if (!shelfNames.includes(targetShelf.name)) setShelfNames((prev) => [...prev, targetShelf.name]);
+      } else {
+        navigate(`/jobs/${jobId}`);
+      }
+    } catch {
+      showToast(t('common.saveError'));
     }
   };
 

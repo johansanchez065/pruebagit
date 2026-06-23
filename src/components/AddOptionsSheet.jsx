@@ -3,18 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { findOrCreateShelf } from '../db/shelvesRepo';
 import { BigButton } from './BigButton';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 
 export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const showToast = useToast();
   const [creatingShelf, setCreatingShelf] = useState(false);
   const [shelfName, setShelfName] = useState('');
+  const [savingShelf, setSavingShelf] = useState(false);
 
   const handleCreateShelf = async () => {
-    if (!shelfName.trim()) return;
-    await findOrCreateShelf(jobId, shelfName);
-    onShelfCreated?.();
-    onClose();
+    if (!shelfName.trim() || savingShelf) return;
+    setSavingShelf(true);
+    try {
+      await findOrCreateShelf(jobId, shelfName);
+      onShelfCreated?.();
+      onClose();
+    } catch {
+      showToast(t('common.saveError'));
+      setSavingShelf(false);
+    }
   };
 
   if (creatingShelf) {
@@ -33,7 +42,7 @@ export function AddOptionsSheet({ jobId, onClose, onShelfCreated }) {
               onKeyDown={(e) => e.key === 'Enter' && handleCreateShelf()}
             />
           </div>
-          <BigButton variant="primary" disabled={!shelfName.trim()} onClick={handleCreateShelf}>
+          <BigButton variant="primary" disabled={!shelfName.trim() || savingShelf} onClick={handleCreateShelf}>
             {t('addOptions.createShelf')}
           </BigButton>
           <BigButton variant="ghost" onClick={() => setCreatingShelf(false)}>

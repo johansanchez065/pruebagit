@@ -5,25 +5,31 @@ import { listShelves } from '../db/shelvesRepo';
 import { BarcodeScannerView } from '../components/BarcodeScannerView';
 import { BigButton } from '../components/BigButton';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 
 export function ScanPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const showToast = useToast();
   const [result, setResult] = useState(null);
 
   const handleDetect = useCallback(
     async (code) => {
-      const product = await findByUpc(jobId, code);
-      if (!product) {
-        setResult({ status: 'not-found', upc: code });
-        return;
+      try {
+        const product = await findByUpc(jobId, code);
+        if (!product) {
+          setResult({ status: 'not-found', upc: code });
+          return;
+        }
+        const shelves = await listShelves(jobId);
+        const shelf = shelves.find((s) => s.id === product.shelfId);
+        setResult({ status: 'found', product, shelfName: shelf?.name || t('scan.noShelf') });
+      } catch {
+        showToast(t('common.loadError'));
       }
-      const shelves = await listShelves(jobId);
-      const shelf = shelves.find((s) => s.id === product.shelfId);
-      setResult({ status: 'found', product, shelfName: shelf?.name || t('scan.noShelf') });
     },
-    [jobId, t],
+    [jobId, t, showToast],
   );
 
   return (

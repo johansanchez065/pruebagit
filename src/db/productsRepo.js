@@ -1,5 +1,18 @@
-import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, deleteDoc, where, writeBatch } from 'firebase/firestore';
-import { db, ensureAuth } from '../firebase/config';
+import {
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
+import { db, ensureAuth, subscribeWithAuth } from '../firebase/config';
 import { normalizeUpc, upcVariants } from '../lib/upc';
 
 function productsCollection(jobId) {
@@ -17,18 +30,11 @@ export async function listProducts(jobId) {
 }
 
 export function subscribeProducts(jobId, callback) {
-  let unsubscribe = () => {};
-  let cancelled = false;
-  ensureAuth().then(() => {
-    if (cancelled) return;
-    unsubscribe = onSnapshot(productsCollection(jobId), (snap) => {
+  return subscribeWithAuth(() =>
+    onSnapshot(productsCollection(jobId), (snap) => {
       callback(snap.docs.map((d) => d.data()));
-    });
-  });
-  return () => {
-    cancelled = true;
-    unsubscribe();
-  };
+    }),
+  );
 }
 
 export async function addProduct({ jobId, shelfId, name, upc }) {
@@ -39,20 +45,26 @@ export async function addProduct({ jobId, shelfId, name, upc }) {
   return product;
 }
 
+// Partial update (not read+overwrite): a concurrent status tap from a
+// teammate while this edit is in flight must not get clobbered.
 export async function updateProduct(jobId, id, changes) {
   await ensureAuth();
+  const patch = { ...changes };
+  if (patch.name !== undefined) patch.name = patch.name.trim();
+  if (patch.upc !== undefined) patch.upc = normalizeUpc(patch.upc);
+  await updateDoc(productRef(jobId, id), patch);
+}
+
+// 1-tap collaboration: marks a product found/not-found with who and when,
+// without touching name/UPC/shelf. `status: null` clears it back to pending.
+export async function setProductStatus(jobId, id, status, by) {
+  await ensureAuth();
   const ref = productRef(jobId, id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  const product = snap.data();
-  const updated = {
-    ...product,
-    ...changes,
-    name: changes.name !== undefined ? changes.name.trim() : product.name,
-    upc: changes.upc !== undefined ? normalizeUpc(changes.upc) : product.upc,
-  };
-  await setDoc(ref, updated);
-  return updated;
+  if (status === null) {
+    await updateDoc(ref, { status: deleteField(), statusBy: deleteField(), statusAt: deleteField() });
+  } else {
+    await updateDoc(ref, { status, statusBy: by, statusAt: Date.now() });
+  }
 }
 
 export async function deleteProduct(jobId, id) {

@@ -42,7 +42,41 @@ export function ensureAuth() {
         reject,
       );
       signInAnonymously(auth).catch(reject);
+    }).catch((err) => {
+      // Without this, one failed sign-in (bad config, a momentary signal
+      // drop) would permanently wedge every future call on this dead promise
+      // — clearing the cache lets the next call retry from scratch.
+      authReady = null;
+      throw err;
     });
   }
   return authReady;
+}
+
+// Wraps a realtime listener so a failed/blip'd auth doesn't leave the screen
+// stuck on its initial loading state forever — it keeps retrying until the
+// subscription is cancelled (component unmount) or it finally succeeds.
+export function subscribeWithAuth(attach) {
+  let unsubscribe = () => {};
+  let cancelled = false;
+  let retryTimer = null;
+
+  const attempt = () => {
+    ensureAuth()
+      .then(() => {
+        if (cancelled) return;
+        unsubscribe = attach();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        retryTimer = setTimeout(attempt, 3000);
+      });
+  };
+  attempt();
+
+  return () => {
+    cancelled = true;
+    clearTimeout(retryTimer);
+    unsubscribe();
+  };
 }

@@ -177,6 +177,12 @@ textarea:focus {
   align-items: stretch;
 }
 
+.job-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .job-code-chip {
   align-self: flex-start;
   background: var(--surface-2);
@@ -327,6 +333,53 @@ textarea:focus {
   font-size: 14px;
   color: var(--text-dim);
   font-family: 'SF Mono', ui-monospace, monospace;
+}
+
+.product-row-status {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.product-row-status--found {
+  color: var(--success);
+}
+
+.product-row-status--missing {
+  color: var(--danger);
+}
+
+.status-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.status-btn {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.status-btn.is-active {
+  opacity: 1;
+}
+
+.status-btn--found.is-active {
+  background: #16341f;
+  border-color: var(--success);
+}
+
+.status-btn--missing.is-active {
+  background: #3a1414;
+  border-color: var(--danger);
 }
 
 .quick-actions {

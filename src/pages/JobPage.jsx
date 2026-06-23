@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { subscribeJob } from '../db/jobsRepo';
 import { subscribeShelves, findOrCreateShelf } from '../db/shelvesRepo';
-import { subscribeProducts, updateProduct, deleteProduct } from '../db/productsRepo';
+import { subscribeProducts, updateProduct, deleteProduct, setProductStatus } from '../db/productsRepo';
 import { normalizeUpc } from '../lib/upc';
 import { sortShelves } from '../lib/shelfSort';
+import { getDisplayName, setDisplayName } from '../lib/identity';
 import { BigButton } from '../components/BigButton';
+import { IconButton } from '../components/IconButton';
 import { CountdownChip } from '../components/CountdownChip';
 import { SearchBar } from '../components/SearchBar';
 import { ShelfGroup } from '../components/ShelfGroup';
@@ -13,6 +15,8 @@ import { ProductRow } from '../components/ProductRow';
 import { ProductEditModal } from '../components/ProductEditModal';
 import { AddOptionsSheet } from '../components/AddOptionsSheet';
 import { EmptyState } from '../components/EmptyState';
+import { NamePrompt } from '../components/NamePrompt';
+import { JobQrModal } from '../components/JobQrModal';
 import { useCountdown } from '../hooks/useCountdown';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -29,6 +33,8 @@ export function JobPage() {
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState(null);
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(null);
 
   const remaining = useCountdown(job || null);
 
@@ -69,16 +75,59 @@ export function JobPage() {
   }, [shelves, products]);
 
   const handleSaveEdit = async ({ name, upc, shelf }) => {
-    const target = await findOrCreateShelf(jobId, shelf);
-    await updateProduct(jobId, editingProduct.id, { name, upc, shelfId: target.id });
-    setEditingProduct(null);
-    showToast(t('job.productUpdated'));
+    try {
+      const target = await findOrCreateShelf(jobId, shelf);
+      await updateProduct(jobId, editingProduct.id, { name, upc, shelfId: target.id });
+      setEditingProduct(null);
+      showToast(t('job.productUpdated'));
+    } catch {
+      showToast(t('common.saveError'));
+    }
   };
 
   const handleDeleteEdit = async (productId) => {
-    await deleteProduct(jobId, productId);
-    setEditingProduct(null);
-    showToast(t('job.productDeleted'));
+    try {
+      await deleteProduct(jobId, productId);
+      setEditingProduct(null);
+      showToast(t('job.productDeleted'));
+    } catch {
+      showToast(t('common.saveError'));
+    }
+  };
+
+  const applyStatus = async (product, status, name) => {
+    try {
+      await setProductStatus(jobId, product.id, status, name);
+    } catch {
+      showToast(t('common.saveError'));
+    }
+  };
+
+  // Lazy identity: the name is only ever asked for right before the first
+  // status tap, never up front — skipping locks in a fallback so the prompt
+  // never interrupts again.
+  const handleSetStatus = (product, status) => {
+    const name = getDisplayName();
+    if (!name) {
+      setPendingStatus({ product, status });
+      return;
+    }
+    applyStatus(product, status, name);
+  };
+
+  const handleNameConfirm = (name) => {
+    setDisplayName(name);
+    const pending = pendingStatus;
+    setPendingStatus(null);
+    if (pending) applyStatus(pending.product, pending.status, name);
+  };
+
+  const handleNameSkip = () => {
+    const fallback = t('namePrompt.fallbackName');
+    setDisplayName(fallback);
+    const pending = pendingStatus;
+    setPendingStatus(null);
+    if (pending) applyStatus(pending.product, pending.status, fallback);
   };
 
   const handleCopyCode = async () => {
@@ -114,9 +163,14 @@ export function JobPage() {
         <CountdownChip remainingMs={remaining} />
       </div>
 
-      <button type="button" className="job-code-chip" onClick={handleCopyCode}>
-        {t('job.codeLabel', { code: jobId })}
-      </button>
+      <div className="job-code-row">
+        <button type="button" className="job-code-chip" onClick={handleCopyCode}>
+          {t('job.codeLabel', { code: jobId })}
+        </button>
+        <IconButton label={t('job.showQr')} onClick={() => setShowQr(true)}>
+          ▦
+        </IconButton>
+      </div>
 
       <SearchBar value={search} onChange={setSearch} onScanClick={() => navigate(`/jobs/${jobId}/scan`)} />
 
@@ -140,6 +194,7 @@ export function JobPage() {
                 product={product}
                 shelfName={shelfById.get(product.shelfId)?.name}
                 onClick={() => setEditingProduct({ ...product, shelfName: shelfById.get(product.shelfId)?.name || '' })}
+                onSetStatus={handleSetStatus}
               />
             ))}
           </div>
@@ -153,6 +208,7 @@ export function JobPage() {
             shelf={shelf}
             products={shelfProducts}
             onProductClick={(product) => setEditingProduct({ ...product, shelfName: shelf.name })}
+            onSetStatus={handleSetStatus}
           />
         ))
       )}
@@ -174,6 +230,10 @@ export function JobPage() {
           onShelfCreated={() => showToast(t('job.shelfCreated'))}
         />
       )}
+
+      {showQr && <JobQrModal code={jobId} onClose={() => setShowQr(false)} />}
+
+      {pendingStatus && <NamePrompt onConfirm={handleNameConfirm} onSkip={handleNameSkip} />}
     </div>
   );
 }

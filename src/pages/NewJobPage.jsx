@@ -3,16 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { createJob } from '../db/jobsRepo';
 import { BigButton } from '../components/BigButton';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 
 export function NewJobPage() {
   const { t } = useLanguage();
+  const showToast = useToast();
   const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
-    const job = await createJob(name);
-    navigate(`/jobs/${job.id}`, { replace: true });
+    if (!name.trim() || creating) return;
+    setCreating(true);
+    try {
+      const job = await createJob(name);
+      navigate(`/jobs/${job.id}`, { replace: true });
+    } catch {
+      showToast(t('common.saveError'));
+      setCreating(false);
+    }
   };
 
   return (
@@ -37,7 +46,7 @@ export function NewJobPage() {
       </div>
       <p className="helper-text">{t('newJob.helper')}</p>
 
-      <BigButton variant="primary" disabled={!name.trim()} onClick={handleCreate}>
+      <BigButton variant="primary" disabled={!name.trim() || creating} onClick={handleCreate}>
         {t('newJob.create')}
       </BigButton>
     </div>

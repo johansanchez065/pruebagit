@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listRecentJobs, deleteJob, joinJob } from '../db/jobsRepo';
 import { BigButton } from '../components/BigButton';
 import { IconButton } from '../components/IconButton';
 import { CountdownChip } from '../components/CountdownChip';
 import { EmptyState } from '../components/EmptyState';
+import { BarcodeScannerView } from '../components/BarcodeScannerView';
 import { useCountdown } from '../hooks/useCountdown';
 import { formatDateTime } from '../lib/time';
 import { useLanguage } from '../context/LanguageContext';
@@ -37,13 +38,18 @@ export function HomePage() {
   const [jobs, setJobs] = useState(() => listRecentJobs());
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [scanningQr, setScanningQr] = useState(false);
 
   const refresh = () => setJobs(listRecentJobs());
 
   const handleDelete = async (job) => {
     if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;
-    await deleteJob(job.id);
-    refresh();
+    try {
+      await deleteJob(job.id);
+      refresh();
+    } catch {
+      showToast(t('common.saveError'));
+    }
   };
 
   const handleJoin = async () => {
@@ -56,10 +62,32 @@ export function HomePage() {
         return;
       }
       navigate(`/jobs/${job.id}`);
+    } catch {
+      showToast(t('common.loadError'));
     } finally {
       setJoining(false);
     }
   };
+
+  const handleQrDetect = useCallback(
+    async (code) => {
+      setScanningQr(false);
+      setJoining(true);
+      try {
+        const job = await joinJob(code);
+        if (!job) {
+          showToast(t('home.joinNotFound'));
+          return;
+        }
+        navigate(`/jobs/${job.id}`);
+      } catch {
+        showToast(t('common.loadError'));
+      } finally {
+        setJoining(false);
+      }
+    },
+    [navigate, showToast, t],
+  );
 
   return (
     <div className="screen">
@@ -81,6 +109,9 @@ export function HomePage() {
           onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
           maxLength={6}
         />
+        <IconButton label={t('home.scanQr')} onClick={() => setScanningQr(true)}>
+          📷
+        </IconButton>
         <button
           type="button"
           className="big-btn big-btn--secondary join-btn"
@@ -90,6 +121,18 @@ export function HomePage() {
           {t('home.join')}
         </button>
       </div>
+
+      {scanningQr && (
+        <div className="modal-overlay" onClick={() => setScanningQr(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>{t('home.scanQrTitle')}</h2>
+            <BarcodeScannerView mode="qr" onDetect={handleQrDetect} />
+            <BigButton variant="ghost" onClick={() => setScanningQr(false)}>
+              {t('common.back')}
+            </BigButton>
+          </div>
+        </div>
+      )}
 
       {jobs.length === 0 ? (
         <EmptyState emoji="🗂️" title={t('home.emptyTitle')} subtitle={t('home.emptySubtitle')} />

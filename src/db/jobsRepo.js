@@ -1,5 +1,5 @@
 import { deleteDoc, doc, getDoc, getDocs, collection, setDoc, onSnapshot, writeBatch } from 'firebase/firestore';
-import { db, ensureAuth } from '../firebase/config';
+import { db, ensureAuth, subscribeWithAuth } from '../firebase/config';
 
 export const JOB_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -95,18 +95,11 @@ export async function joinJob(rawCode) {
 }
 
 export function subscribeJob(jobId, callback) {
-  let unsubscribe = () => {};
-  let cancelled = false;
-  ensureAuth().then(() => {
-    if (cancelled) return;
-    unsubscribe = onSnapshot(jobRef(jobId), (snap) => {
+  return subscribeWithAuth(() =>
+    onSnapshot(jobRef(jobId), (snap) => {
       callback(snap.exists() ? snap.data() : null);
-    });
-  });
-  return () => {
-    cancelled = true;
-    unsubscribe();
-  };
+    }),
+  );
 }
 
 async function deleteSubcollection(jobId, name) {
