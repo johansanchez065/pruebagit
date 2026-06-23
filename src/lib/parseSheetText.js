@@ -1,7 +1,20 @@
-const SHELF_HEADER_RE = /^shelf\s*#?\s*([\w.-]+)\s*:?\s*$/i;
-// A product line is "<name> <run of 6-14 digits>" — UPC/EAN codes in the
-// field range from 8 (UPC-E-ish) to 13-14 digits; 6 is a deliberately loose
-// floor so short codes still get picked up for the reviewer to fix.
+// Real planogram reports (e.g. "Shelf: 12, Length: 22' 6.00", Height: 0'
+// 8.00", Depth: 1' 7.00", Product: 22' 5.81"") put extra dimension text
+// after the shelf number — only the leading number/name matters here, so
+// the match isn't anchored to the end of the line anymore.
+const SHELF_HEADER_RE = /^shelf\s*#?\s*:?\s*([\w.-]+)\b/i;
+
+// Printed planogram rows look like "9  7265522011  HEALTHY CHOICE CAFE
+// STEAMERS MEX  033104  9.25  OZ  1  9  6  5.98  10.54": an optional
+// position number, then the UPC, then the product name, then a stockcode
+// and a bunch of columns (size/UOM/facings/pack out/case pack/mvt/DOS) this
+// app has no use for. Matching stops at the stockcode; everything after it
+// is simply ignored.
+const REPORT_ROW_RE = /^(?:\d{1,3}\s+)?(\d{6,14})\s+(.+?)\s+\d{4,8}\b/;
+
+// Simpler hand-typed/pasted lines: "<name> <run of 6-14 digits>" with the
+// UPC trailing instead of leading. 6 is a deliberately loose floor so short
+// codes still get picked up for the reviewer to fix.
 const PRODUCT_LINE_RE = /^(.*\S)\s+(\d{6,14})\s*$/;
 
 let unassignedCounter = 0;
@@ -23,6 +36,17 @@ export function parseSheetText(text) {
     const headerMatch = line.match(SHELF_HEADER_RE);
     if (headerMatch) {
       currentShelf = `Shelf ${headerMatch[1]}`;
+      continue;
+    }
+
+    const reportMatch = line.match(REPORT_ROW_RE);
+    if (reportMatch) {
+      rows.push({
+        rowId: `row-${rows.length}-${Date.now()}-${unassignedCounter++}`,
+        shelf: currentShelf,
+        name: reportMatch[2].trim(),
+        upc: reportMatch[1],
+      });
       continue;
     }
 
