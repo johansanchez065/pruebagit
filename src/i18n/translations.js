@@ -199,6 +199,8 @@ export const translations = {
     'common.back': 'Volver',
     'common.saveError': 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.',
     'common.loadError': 'No se pudo cargar. Revisa tu conexión e intenta de nuevo.',
+    'common.appError': 'Algo falló al cargar esta pantalla. Suele pasar justo después de una actualización — recarga la app.',
+    'common.reload': 'Recargar',
 
     'time.expired': 'Expirado',
     'time.minSuffix': 'min',
@@ -404,6 +406,8 @@ export const translations = {
     'common.back': 'Back',
     'common.saveError': "Couldn't save. Check your connection and try again.",
     'common.loadError': "Couldn't load. Check your connection and try again.",
+    'common.appError': "Something failed loading this screen. This usually happens right after an update — reload the app.",
+    'common.reload': 'Reload',
 
     'time.expired': 'Expired',
     'time.minSuffix': 'min',

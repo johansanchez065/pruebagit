@@ -4,6 +4,7 @@ import { startCleanupScheduler } from './db/cleanup';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { LanguagePicker } from './components/LanguagePicker';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomePage } from './pages/HomePage';
 import { JobPage } from './pages/JobPage';
 
@@ -38,28 +39,30 @@ function CleanupScheduler() {
 }
 
 function AppRoutes() {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
 
   if (!lang) return <LanguagePicker />;
 
   return (
-    <ToastProvider>
-      <CleanupScheduler />
-      <Suspense fallback={null}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/jobs/new" element={<NewJobPage />} />
-          <Route path="/jobs/:jobId" element={<JobPage />} />
-          <Route path="/jobs/:jobId/add/manual" element={<AddManualPage />} />
-          <Route path="/jobs/:jobId/add/paste" element={<PasteTextPage />} />
-          <Route path="/jobs/:jobId/add/photo" element={<PhotoOcrPage />} />
-          <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
-          <Route path="/jobs/:jobId/scan" element={<ScanPage />} />
-          <Route path="/jobs/:jobId/photos" element={<ReferencePhotosPage />} />
-          <Route path="/jobs/:jobId/report" element={<ReportPage />} />
-        </Routes>
-      </Suspense>
-    </ToastProvider>
+    <ErrorBoundary message={t('common.appError')} reloadLabel={t('common.reload')}>
+      <ToastProvider>
+        <CleanupScheduler />
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/jobs/new" element={<NewJobPage />} />
+            <Route path="/jobs/:jobId" element={<JobPage />} />
+            <Route path="/jobs/:jobId/add/manual" element={<AddManualPage />} />
+            <Route path="/jobs/:jobId/add/paste" element={<PasteTextPage />} />
+            <Route path="/jobs/:jobId/add/photo" element={<PhotoOcrPage />} />
+            <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
+            <Route path="/jobs/:jobId/scan" element={<ScanPage />} />
+            <Route path="/jobs/:jobId/photos" element={<ReferencePhotosPage />} />
+            <Route path="/jobs/:jobId/report" element={<ReportPage />} />
+          </Routes>
+        </Suspense>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 
