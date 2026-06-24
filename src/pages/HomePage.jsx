@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { listRecentJobs, deleteJob, joinJob } from '../db/jobsRepo';
 import { BigButton } from '../components/BigButton';
 import { IconButton } from '../components/IconButton';
@@ -34,10 +34,12 @@ function JobCard({ job, onDelete, lang, t }) {
 export function HomePage() {
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const showToast = useToast();
   const [jobs, setJobs] = useState([]);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [showJoinSheet, setShowJoinSheet] = useState(false);
   const [scanningQr, setScanningQr] = useState(false);
 
   const refresh = () => {
@@ -47,6 +49,16 @@ export function HomePage() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // The real workflow is almost always one active job at a time — skip the
+  // job list and go straight to its product search. The back button on
+  // JobPage passes skipAutoOpen so coming back here to switch/join/start a
+  // job actually lands here instead of bouncing straight back into it.
+  useEffect(() => {
+    if (jobs.length === 1 && !location.state?.skipAutoOpen) {
+      navigate(`/jobs/${jobs[0].id}`);
+    }
+  }, [jobs, location.state, navigate]);
 
   const handleDelete = async (job) => {
     if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;
@@ -67,6 +79,7 @@ export function HomePage() {
         showToast(t('home.joinNotFound'));
         return;
       }
+      setShowJoinSheet(false);
       navigate(`/jobs/${job.id}`);
     } catch {
       showToast(t('common.loadError'));
@@ -85,6 +98,7 @@ export function HomePage() {
           showToast(t('home.joinNotFound'));
           return;
         }
+        setShowJoinSheet(false);
         navigate(`/jobs/${job.id}`);
       } catch {
         showToast(t('common.loadError'));
@@ -99,6 +113,9 @@ export function HomePage() {
     <div className="screen">
       <div className="app-header">
         <h1>Shelf Finder</h1>
+        <button type="button" className="job-code-chip" onClick={() => setShowJoinSheet(true)}>
+          {t('home.joinJobButton')}
+        </button>
         <IconButton
           label={t('home.languageToggleLabel')}
           onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
@@ -107,28 +124,33 @@ export function HomePage() {
         </IconButton>
       </div>
 
-      <div className="join-row">
-        <input
-          placeholder={t('home.joinPlaceholder')}
-          value={joinCode}
-          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-          maxLength={6}
-        />
-        <IconButton label={t('home.scanQr')} onClick={() => setScanningQr(true)}>
-          📷
-        </IconButton>
-        <button
-          type="button"
-          className="big-btn big-btn--secondary join-btn"
-          disabled={!joinCode.trim() || joining}
-          onClick={handleJoin}
-        >
-          {t('home.join')}
-        </button>
-      </div>
-
-      <p className="helper-text">{t('home.joinHint')}</p>
+      {showJoinSheet && (
+        <div className="modal-overlay" onClick={() => setShowJoinSheet(false)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>{t('home.joinJobButton')}</h2>
+            <p className="helper-text">{t('home.joinHint')}</p>
+            <div className="join-row">
+              <input
+                autoFocus
+                placeholder={t('home.joinPlaceholder')}
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                maxLength={6}
+              />
+              <IconButton label={t('home.scanQr')} onClick={() => setScanningQr(true)}>
+                📷
+              </IconButton>
+            </div>
+            <BigButton variant="primary" disabled={!joinCode.trim() || joining} onClick={handleJoin}>
+              {t('home.join')}
+            </BigButton>
+            <BigButton variant="ghost" onClick={() => setShowJoinSheet(false)}>
+              {t('common.back')}
+            </BigButton>
+          </div>
+        </div>
+      )}
 
       {scanningQr && (
         <div className="modal-overlay" onClick={() => setScanningQr(false)}>

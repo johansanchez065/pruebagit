@@ -68,8 +68,9 @@ export function JobPage() {
     if (!query) return null;
     const queryDigits = normalizeUpc(query);
     return products.filter((p) => {
+      const upcStr = String(p.upc || '');
       const descMatch = p.description.toLowerCase().includes(query);
-      const upcMatch = queryDigits.length > 0 && p.upc.includes(queryDigits);
+      const upcMatch = queryDigits.length > 0 && (upcStr.includes(queryDigits) || upcStr.endsWith(queryDigits));
       const positionMatch = p.position && p.position.toLowerCase().includes(query);
       const shelfName = shelfById.get(p.shelfId)?.name || '';
       const shelfMatch = shelfName.toLowerCase().includes(query);
@@ -222,7 +223,11 @@ export function JobPage() {
   return (
     <div className="screen">
       <div className="app-header">
-        <button className="back-btn" onClick={() => navigate('/')} aria-label={t('common.back')}>
+        <button
+          className="back-btn"
+          onClick={() => navigate('/', { state: { skipAutoOpen: true } })}
+          aria-label={t('common.back')}
+        >
           ‹
         </button>
         <h1>{job.name}</h1>
