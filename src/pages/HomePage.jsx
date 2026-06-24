@@ -128,6 +128,8 @@ export function HomePage() {
         </button>
       </div>
 
+      <p className="helper-text">{t('home.joinHint')}</p>
+
       {scanningQr && (
         <div className="modal-overlay" onClick={() => setScanningQr(false)}>
           <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
