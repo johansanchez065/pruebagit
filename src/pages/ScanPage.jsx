@@ -1,0 +1,74 @@
+import { useCallback, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { findByUpc } from '../db/productsRepo';
+import { listShelves } from '../db/shelvesRepo';
+import { recordSearch } from '../db/searchHistoryRepo';
+import { BarcodeScannerView } from '../components/BarcodeScannerView';
+import { BigButton } from '../components/BigButton';
+import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
+
+export function ScanPage() {
+  const { jobId } = useParams();
+  const navigate = useNavigate();
+  const { t } = useLanguage();
+  const showToast = useToast();
+  const [result, setResult] = useState(null);
+
+  const handleDetect = useCallback(
+    async (code) => {
+      try {
+        const product = await findByUpc(jobId, code);
+        if (!product) {
+          setResult({ status: 'not-found', upc: code });
+          return;
+        }
+        const shelves = await listShelves(jobId);
+        const shelf = shelves.find((s) => s.id === product.shelfId);
+        const shelfName = shelf?.name || t('scan.noShelf');
+        setResult({ status: 'found', product, shelfName });
+        recordSearch(jobId, product, shelfName);
+      } catch {
+        showToast(t('common.loadError'));
+      }
+    },
+    [jobId, t, showToast],
+  );
+
+  return (
+    <div className="screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={() => navigate(`/jobs/${jobId}`)} aria-label={t('common.back')}>
+          ‹
+        </button>
+        <h1>{t('scan.title')}</h1>
+      </div>
+
+      {!result && <BarcodeScannerView onDetect={handleDetect} />}
+
+      {result && (
+        <div className="card scan-result">
+          {result.status === 'found' ? (
+            <>
+              <div>{t('scan.found')}</div>
+              <div className="product-row-name" style={{ fontSize: 20 }}>
+                {result.product.description}
+              </div>
+              <div className="upc">UPC: {result.product.upc}</div>
+              <div className="shelf-badge">{result.shelfName}</div>
+              {result.product.position && <div className="upc">{t('scan.position', { position: result.product.position })}</div>}
+            </>
+          ) : (
+            <>
+              <div>{t('scan.notFound')}</div>
+              <div className="upc">UPC: {result.upc}</div>
+            </>
+          )}
+          <BigButton variant="primary" onClick={() => setResult(null)}>
+            {t('scan.keepScanning')}
+          </BigButton>
+        </div>
+      )}
+    </div>
+  );
+}
