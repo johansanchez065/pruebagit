@@ -1,11 +1,28 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+function commitHash() {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
+
+// Build-time, not a manually bumped number, so it's never stale: the date +
+// commit hash change on every build, which is exactly what's needed to tell
+// whether a phone is actually showing the latest deploy.
+const APP_VERSION = `v${new Date().toISOString().slice(0, 10).replace(/-/g, '.')}-${commitHash()}`;
 
 export default defineConfig({
   // GitHub Pages serves this project from /pruebagit/, not from the domain
   // root, so every built asset reference needs that prefix.
   base: '/pruebagit/',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   plugins: [
     react(),
     VitePWA({

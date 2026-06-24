@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { listRecentJobs, deleteJob, joinJob } from '../db/jobsRepo';
+import { clearAllAppData } from '../lib/clearAppData';
 import { BigButton } from '../components/BigButton';
 import { IconButton } from '../components/IconButton';
 import { CountdownChip } from '../components/CountdownChip';
@@ -59,6 +60,11 @@ export function HomePage() {
       navigate(`/jobs/${jobs[0].id}`);
     }
   }, [jobs, location.state, navigate]);
+
+  const handleClearData = () => {
+    if (!window.confirm(t('home.clearDataConfirm'))) return;
+    clearAllAppData();
+  };
 
   const handleDelete = async (job) => {
     if (!window.confirm(t('home.deleteConfirm', { name: job.name }))) return;
@@ -173,6 +179,11 @@ export function HomePage() {
           ))}
         </div>
       )}
+
+      <BigButton variant="ghost" onClick={handleClearData}>
+        {t('home.clearDataButton')}
+      </BigButton>
+      <p className="helper-text center-text">{__APP_VERSION__}</p>
 
       <div className="fab-row">
         <BigButton as="link" to="/jobs/new" variant="primary">

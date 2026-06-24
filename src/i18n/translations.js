@@ -20,6 +20,9 @@ export const translations = {
     'home.joinHint': 'Este código es para unirte al trabajo de un compañero. Para buscar un producto por UPC o nombre, abre primero el trabajo.',
     'home.scanQr': 'Escanear QR para unirse',
     'home.scanQrTitle': 'Escanear código QR',
+    'home.clearDataButton': '🧹 Borrar datos locales (prueba)',
+    'home.clearDataConfirm':
+      '¿Borrar todos los datos guardados en este teléfono? Esto borra todos los trabajos, productos y la caché. No se puede deshacer.',
 
     'newJob.title': 'Nuevo trabajo',
     'newJob.nameLabel': 'Nombre del trabajo',
@@ -234,6 +237,9 @@ export const translations = {
     'home.joinHint': "This code is for joining a teammate's job. To search a product by UPC or name, open the job first.",
     'home.scanQr': 'Scan QR to join',
     'home.scanQrTitle': 'Scan QR code',
+    'home.clearDataButton': '🧹 Clear local data (test)',
+    'home.clearDataConfirm':
+      'Delete all data stored on this phone? This deletes every job, product, and cache. This cannot be undone.',
 
     'newJob.title': 'New job',
     'newJob.nameLabel': 'Job name',
