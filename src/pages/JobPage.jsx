@@ -4,7 +4,7 @@ import { subscribeJob, deleteJob } from '../db/jobsRepo';
 import { subscribeShelves, findOrCreateShelf } from '../db/shelvesRepo';
 import { subscribeProducts, updateProduct, deleteProduct, setProductStatus } from '../db/productsRepo';
 import { listSearchHistory, recordSearch } from '../db/searchHistoryRepo';
-import { normalizeUpc } from '../lib/upc';
+import { filterProducts } from '../lib/productSearch';
 import { sortShelves } from '../lib/shelfSort';
 import { getDisplayName, setDisplayName } from '../lib/identity';
 import { BigButton } from '../components/BigButton';
@@ -60,23 +60,12 @@ export function JobPage() {
 
   const trimmedSearch = search.trim();
 
-  // Matches full UPC, any UPC substring (which covers "last 4/5/6 digits"
-  // since that's just a suffix substring), description, position, or shelf
-  // name — whichever the merchandiser happened to type.
-  const filtered = useMemo(() => {
-    const query = trimmedSearch.toLowerCase();
-    if (!query) return null;
-    const queryDigits = normalizeUpc(query);
-    return products.filter((p) => {
-      const upcStr = String(p.upc || '');
-      const descMatch = p.description.toLowerCase().includes(query);
-      const upcMatch = queryDigits.length > 0 && (upcStr.includes(queryDigits) || upcStr.endsWith(queryDigits));
-      const positionMatch = p.position && p.position.toLowerCase().includes(query);
-      const shelfName = shelfById.get(p.shelfId)?.name || '';
-      const shelfMatch = shelfName.toLowerCase().includes(query);
-      return descMatch || upcMatch || positionMatch || shelfMatch;
-    });
-  }, [products, trimmedSearch, shelfById]);
+  // Always searches every product in the job, not just the current shelf —
+  // see filterProducts() for why.
+  const filtered = useMemo(
+    () => filterProducts(products, trimmedSearch, shelfById),
+    [products, trimmedSearch, shelfById],
+  );
 
   const singleMatch = filtered && filtered.length === 1 ? filtered[0] : null;
 

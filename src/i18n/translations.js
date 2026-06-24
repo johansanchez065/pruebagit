@@ -72,8 +72,9 @@ export const translations = {
 
     'photoOcr.title': 'Foto del planogram',
     'photoOcr.helperIdle':
-      'Toma una foto clara y bien iluminada de la hoja. Entre mejor se vea el texto, mejor sale la lectura automática.',
+      'Toma o sube una foto clara de la página de la TABLA de productos (Position/UPC/Description). La foto del planogram visual va en "Fotos de referencia", no aquí.',
     'photoOcr.takePhoto': '📷 Tomar foto',
+    'photoOcr.uploadGallery': '🖼️ Subir de galería',
     'photoOcr.imageAlt': 'Foto de la hoja',
     'photoOcr.recognizing': 'Leyendo texto... {progress}%',
     'photoOcr.errorMessage': 'No se pudo leer la imagen. Intenta con otra foto.',
@@ -116,6 +117,8 @@ export const translations = {
       'Se detectaron {positions} posiciones pero {upcs} UPC al leer por columnas — revisa el emparejado de filas.',
     'review.warning.upcDescriptionMismatch':
       'Se detectaron {upcs} UPC pero {descriptions} descripciones al leer por columnas — revisa el emparejado de filas.',
+    'review.warning.stockcodeMismatch':
+      'Se detectaron {stockcodes} stockcodes pero {upcs} UPC al leer por columnas — revisa el emparejado de filas.',
 
     'scan.title': 'Escanear código',
     'scan.found': 'Producto encontrado',
@@ -289,8 +292,9 @@ export const translations = {
 
     'photoOcr.title': 'Planogram photo',
     'photoOcr.helperIdle':
-      'Take a clear, well-lit photo of the sheet. The better the text shows up, the better the automatic reading.',
+      'Take or upload a clear photo of the product TABLE page (Position/UPC/Description). The visual planogram photo goes under "Reference photos", not here.',
     'photoOcr.takePhoto': '📷 Take photo',
+    'photoOcr.uploadGallery': '🖼️ Upload from gallery',
     'photoOcr.imageAlt': 'Photo of the sheet',
     'photoOcr.recognizing': 'Reading text... {progress}%',
     'photoOcr.errorMessage': "Couldn't read the image. Try another photo.",
@@ -333,6 +337,8 @@ export const translations = {
       'Detected {positions} positions but {upcs} UPCs reading by columns — check the row pairing.',
     'review.warning.upcDescriptionMismatch':
       'Detected {upcs} UPCs but {descriptions} descriptions reading by columns — check the row pairing.',
+    'review.warning.stockcodeMismatch':
+      'Detected {stockcodes} stockcodes but {upcs} UPCs reading by columns — check the row pairing.',
 
     'scan.title': 'Scan code',
     'scan.found': 'Product found',

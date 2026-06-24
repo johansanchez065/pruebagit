@@ -15,3 +15,13 @@ export function upcVariants(raw) {
   if (digits.length === 13 && digits.startsWith('0')) variants.add(digits.slice(1));
   return [...variants];
 }
+
+// Aisle search rarely has the full code in view — a torn label or a shelf
+// tag usually only shows the last few digits. Matching anywhere in the UPC
+// (not just a prefix) covers "last 3/4/5/6 digits" and any other partial
+// substring the merchandiser can read off the shelf.
+export function matchesUpcQuery(productUpc, queryDigits) {
+  if (!queryDigits) return false;
+  const upcStr = String(productUpc || '');
+  return upcStr.includes(queryDigits) || upcStr.endsWith(queryDigits);
+}

@@ -11,6 +11,7 @@ export function PhotoOcrPage() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const fileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | recognizing | done | error
@@ -25,6 +26,7 @@ export function PhotoOcrPage() {
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setPreviewUrl(URL.createObjectURL(file));
     setStatus('recognizing');
@@ -47,7 +49,6 @@ export function PhotoOcrPage() {
     setPreviewUrl(null);
     setStatus('idle');
     setText('');
-    fileInputRef.current?.click();
   };
 
   return (
@@ -67,12 +68,22 @@ export function PhotoOcrPage() {
         onChange={handleFile}
         style={{ display: 'none' }}
       />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        style={{ display: 'none' }}
+      />
 
       {status === 'idle' && (
         <>
           <p className="helper-text">{t('photoOcr.helperIdle')}</p>
           <BigButton variant="primary" onClick={() => fileInputRef.current?.click()}>
             {t('photoOcr.takePhoto')}
+          </BigButton>
+          <BigButton variant="secondary" onClick={() => galleryInputRef.current?.click()}>
+            {t('photoOcr.uploadGallery')}
           </BigButton>
         </>
       )}
