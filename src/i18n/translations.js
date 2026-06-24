@@ -119,6 +119,11 @@ export const translations = {
       'Se detectaron {upcs} UPC pero {descriptions} descripciones al leer por columnas — revisa el emparejado de filas.',
     'review.warning.stockcodeMismatch':
       'Se detectaron {stockcodes} stockcodes pero {upcs} UPC al leer por columnas — revisa el emparejado de filas.',
+    'review.continuation.message': 'No se detectó shelf. ¿Continuar usando {shelf}?',
+    'review.continuation.continueButton': 'Continuar {shelf}',
+    'review.continuation.chooseAnother': 'Elegir otro shelf',
+    'review.continuation.apply': 'Aplicar',
+    'review.continuation.placeholder': 'Nombre del shelf',
 
     'scan.title': 'Escanear código',
     'scan.found': 'Producto encontrado',
@@ -339,6 +344,11 @@ export const translations = {
       'Detected {upcs} UPCs but {descriptions} descriptions reading by columns — check the row pairing.',
     'review.warning.stockcodeMismatch':
       'Detected {stockcodes} stockcodes but {upcs} UPCs reading by columns — check the row pairing.',
+    'review.continuation.message': 'No shelf detected. Continue using {shelf}?',
+    'review.continuation.continueButton': 'Continue {shelf}',
+    'review.continuation.chooseAnother': 'Choose another shelf',
+    'review.continuation.apply': 'Apply',
+    'review.continuation.placeholder': 'Shelf name',
 
     'scan.title': 'Scan code',
     'scan.found': 'Product found',

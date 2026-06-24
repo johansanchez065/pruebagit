@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { listShelves, resolveShelvesBulk } from '../db/shelvesRepo';
+import { listShelves, resolveShelvesBulk, getLastUsedShelfName } from '../db/shelvesRepo';
 import { addProductsBulk } from '../db/productsRepo';
+import { countMissingShelf, applyShelfToMissingRows as mergeShelfIntoRows } from '../lib/shelfContinuation';
 import { ReviewTable } from '../components/ReviewTable';
 import { BigButton } from '../components/BigButton';
 import { EmptyState } from '../components/EmptyState';
@@ -33,11 +34,29 @@ export function ReviewPage() {
   const [rows, setRows] = useState(location.state?.rows ?? []);
   const [shelfNames, setShelfNames] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [lastShelfName, setLastShelfName] = useState('');
+  const [choosingShelf, setChoosingShelf] = useState(false);
+  const [chosenShelf, setChosenShelf] = useState('');
   const parseWarnings = location.state?.warnings ?? [];
 
   useEffect(() => {
     listShelves(jobId).then((shelves) => setShelfNames(shelves.map((s) => s.name)));
+    getLastUsedShelfName(jobId).then(setLastShelfName);
   }, [jobId]);
+
+  // A continuation page (rows that came in with no "Shelf:" header and no
+  // manual default typed before import) leaves these rows shelf-less — offer
+  // to bulk-assign the shelf the job was last imported into instead of
+  // making the user fix every row by hand. Once every row has a shelf
+  // (whether from that bulk action or manual edits), the prompt drops away.
+  const missingShelfCount = useMemo(() => countMissingShelf(rows), [rows]);
+  const showContinuationPrompt = missingShelfCount > 0 && lastShelfName.trim().length > 0;
+
+  const applyShelfToMissingRows = (shelfName) => {
+    setRows((prev) => mergeShelfIntoRows(prev, shelfName));
+    setChoosingShelf(false);
+    setChosenShelf('');
+  };
 
   const changeRow = (rowId, patch) => {
     setRows((prev) => prev.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
@@ -101,6 +120,44 @@ export function ReviewPage() {
               {t(warning.key, warning.params)}
             </p>
           ))}
+        </div>
+      )}
+
+      {showContinuationPrompt && (
+        <div className="card">
+          <p className="helper-text">{t('review.continuation.message', { shelf: lastShelfName })}</p>
+          {choosingShelf ? (
+            <div className="field-group">
+              <input
+                list="review-continuation-shelf-options"
+                placeholder={t('review.continuation.placeholder')}
+                value={chosenShelf}
+                onChange={(e) => setChosenShelf(e.target.value)}
+                autoFocus
+              />
+              <datalist id="review-continuation-shelf-options">
+                {shelfNames.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
+              <BigButton
+                variant="primary"
+                disabled={!chosenShelf.trim()}
+                onClick={() => applyShelfToMissingRows(chosenShelf.trim())}
+              >
+                {t('review.continuation.apply')}
+              </BigButton>
+            </div>
+          ) : (
+            <div className="quick-actions">
+              <BigButton variant="primary" onClick={() => applyShelfToMissingRows(lastShelfName)}>
+                {t('review.continuation.continueButton', { shelf: lastShelfName })}
+              </BigButton>
+              <BigButton variant="secondary" onClick={() => setChoosingShelf(true)}>
+                {t('review.continuation.chooseAnother')}
+              </BigButton>
+            </div>
+          )}
         </div>
       )}
 

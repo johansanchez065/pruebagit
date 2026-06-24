@@ -39,6 +39,20 @@ export async function findOrCreateShelf(jobId, rawName) {
   return shelf;
 }
 
+// A multi-page report often splits one shelf's rows across several photos
+// without repeating the "Shelf: N" header on the continuation page. The best
+// guess for "which shelf is this continuation page for" is whichever shelf
+// the most recently saved product in this job landed on — so the review
+// screen can offer it instead of leaving the rows shelf-less.
+export async function getLastUsedShelfName(jobId) {
+  const db = await getDb();
+  const products = await db.getAllFromIndex('products', 'jobId', jobId);
+  if (products.length === 0) return '';
+  const latest = products.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+  const shelf = await db.get('shelves', latest.shelfId);
+  return shelf?.name || '';
+}
+
 // Bulk version for large pasted/OCR imports: resolves every shelf name
 // against what already exists, then only creates the ones that are new — so
 // re-importing a sheet for a shelf that's already there just adds to it
